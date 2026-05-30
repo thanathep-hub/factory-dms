@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Factory DMS — จัดเก็บเอกสาร</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="session.js"></script>
+<script src="sidebar.js"></script>
+<link rel="stylesheet" href="shared.css">
+<style>
+/* Global search overlay */
+.search-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.4);backdrop-filter:blur(3px);z-index:200;display:none;align-items:flex-start;justify-content:center;padding-top:80px}
+.search-overlay.open{display:flex}
+.search-modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;width:100%;max-width:560px;box-shadow:0 20px 60px rgba(0,0,0,0.15);overflow:hidden}
+.search-input-wrap{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)}
+.search-input-wrap input{flex:1;border:none;outline:none;font-family:var(--font);font-size:15px;color:var(--text);background:transparent}
+.search-input-wrap input::placeholder{color:var(--text3)}
+.search-results{max-height:360px;overflow-y:auto}
+.search-result-item{display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s}
+.search-result-item:hover{background:var(--bg3)}
+.search-result-item:last-child{border-bottom:none}
+.search-hint{padding:14px 16px;font-size:12px;color:var(--text3);text-align:center}
+/* Pagination real */
+.page-btn{min-width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;border:1px solid var(--border2);background:var(--bg2);color:var(--text2);cursor:pointer;font-size:12px;font-family:var(--mono);transition:all .15s}
+.page-btn:hover{border-color:var(--accent);color:var(--accent)}
+.page-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.page-btn:disabled{opacity:.4;cursor:not-allowed}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="btn btn-ghost btn-sm" onclick="toggleSidebar()" style="padding:5px 8px"><i data-lucide="menu"></i></button>
+      <span id="topbar-role" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;margin-right:4px"></span><div class="page-title">จัดเก็บเอกสาร <span class="page-sub">Document Store</span></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-ghost btn-sm" onclick="openSearch()" title="ค้นหาทั่วทั้งระบบ (Ctrl+K)"><i data-lucide="search"></i></button>
+        <button class="btn btn-ghost btn-sm" style="position:relative" onclick="location.href='02-approval.html'">
+          <i data-lucide="bell"></i>
+          <span style="position:absolute;top:4px;right:4px;width:6px;height:6px;background:var(--red);border-radius:50%"></span>
+        </button>
+        <div class="divider"></div>
+        <div class="avatar" style="cursor:pointer" onclick="location.href='00-login.html'">SK</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="stats-grid">
+        <div class="stat-box"><div class="stat-label">เอกสารทั้งหมด</div><div class="stat-value" style="color:var(--text)">248</div><div class="stat-sub">+12 เดือนนี้</div></div>
+        <div class="stat-box"><div class="stat-label">Active</div><div class="stat-value" style="color:var(--green)">196</div><div class="stat-sub">79% ของทั้งหมด</div></div>
+        <div class="stat-box"><div class="stat-label">รออนุมัติ</div><div class="stat-value" style="color:var(--amber)">37</div><div class="stat-sub">5 เกินกำหนด</div></div>
+        <div class="stat-box"><div class="stat-label">Obsolete</div><div class="stat-value" style="color:var(--text3)">15</div><div class="stat-sub">ต้อง archive</div></div>
+      </div>
+
+      <div class="filter-bar">
+        <div class="search-box" style="cursor:pointer" onclick="openSearch()">
+          <i data-lucide="search" style="width:14px;height:14px;color:var(--text3)"></i>
+          <span style="color:var(--text3);font-size:13px;flex:1">ค้นหา ชื่อ / รหัส / เนื้อหา...</span>
+          <kbd style="font-size:10px;background:var(--bg4);border:1px solid var(--border2);border-radius:4px;padding:1px 5px;color:var(--text3);font-family:var(--mono)">Ctrl K</kbd>
+        </div>
+        <select class="filter-select" id="cat-filter" onchange="filterDocs()">
+          <option value="">ทุกหมวด</option>
+          <option value="SOP">SOP</option><option value="WI">WI</option><option value="FM">FM</option>
+        </select>
+        <select class="filter-select" id="status-filter" onchange="filterDocs()">
+          <option value="">ทุกสถานะ</option>
+          <option value="Active">Active</option><option value="Draft">Draft</option><option value="Pending">Pending</option><option value="Obsolete">Obsolete</option>
+        </select>
+        <select class="filter-select" id="dept-filter" onchange="filterDocs()">
+          <option value="">ทุกแผนก</option>
+          <option value="Production">Production</option><option value="QA">QA / QC</option><option value="Engineering">Engineering</option><option value="Warehouse">Warehouse</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="openModal('modal-upload')" data-perm="canUpload"><i data-lucide="upload"></i> อัปโหลด</button>
+        <button class="btn btn-ghost btn-sm" onclick="openModal('modal-bulk')" title="Bulk actions"><i data-lucide="sliders-horizontal"></i></button>
+      </div>
+
+      <div class="chip-group">
+        <div class="chip active" onclick="setChip(this,'')">ทั้งหมด (248)</div>
+        <div class="chip" onclick="setChip(this,'SOP')">SOP (84)</div>
+        <div class="chip" onclick="setChip(this,'WI')">WI (112)</div>
+        <div class="chip" onclick="setChip(this,'FM')">FM (52)</div>
+      </div>
+
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title"><i data-lucide="files"></i> รายการเอกสาร</div>
+          <span style="font-size:11px;color:var(--text3)" id="doc-count">แสดง 10 รายการ</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:32px"><input type="checkbox" id="check-all" onchange="toggleAll(this)" style="cursor:pointer"></th>
+                <th>รหัสเอกสาร <i data-lucide="arrow-up-down" style="width:10px;height:10px;cursor:pointer;vertical-align:middle"></i></th>
+                <th>ชื่อเอกสาร</th>
+                <th>หมวด</th>
+                <th>Rev</th>
+                <th>สถานะ</th>
+                <th>แผนก</th>
+                <th>แก้ไขล่าสุด</th>
+                <th>โดย</th>
+                <th style="width:130px">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="doc-tbody"></tbody>
+          </table>
+        </div>
+        <!-- Pagination -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding-top:12px;border-top:1px solid var(--border);margin-top:10px">
+          <div style="font-size:12px;color:var(--text3)">แสดง <span id="page-range">1–5</span> จาก <span id="total-count">10</span> รายการ</div>
+          <div style="display:flex;gap:4px;align-items:center" id="pagination"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- GLOBAL SEARCH OVERLAY -->
+<div class="search-overlay" id="search-overlay" onclick="closeSearch(event)">
+  <div class="search-modal" onclick="event.stopPropagation()">
+    <div class="search-input-wrap">
+      <i data-lucide="search" style="width:18px;height:18px;color:var(--text3);flex-shrink:0"></i>
+      <input type="text" id="global-search-input" placeholder="ค้นหาเอกสาร, รหัส, เนื้อหา..." oninput="globalSearch(this.value)" autocomplete="off">
+      <button class="btn btn-ghost btn-sm" onclick="closeSearchModal()" style="padding:3px 7px;font-size:11px">ESC</button>
+    </div>
+    <div id="search-results-wrap">
+      <div class="search-hint"><i data-lucide="search" style="width:14px;height:14px;vertical-align:middle"></i> พิมพ์เพื่อค้นหา</div>
+    </div>
+  </div>
+</div>
+
+<!-- DOCUMENT DETAIL MODAL (replaces side panel) -->
+<div class="modal-overlay" id="modal-detail">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header" style="gap:12px">
+      <div style="width:40px;height:40px;border-radius:9px;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0"><i data-lucide="file-text" id="detail-icon"></i></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:15px;font-weight:700;color:var(--text)" id="detail-code">—</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="detail-name">—</div>
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap" id="detail-badges"></div>
+      <button class="modal-close" onclick="closeModal('modal-detail')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body" style="padding-top:14px">
+      <!-- Tabs -->
+      <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px">
+        <button class="detail-tab active" onclick="switchDetailTab('info',this)">ข้อมูลเอกสาร</button>
+        <button class="detail-tab" onclick="switchDetailTab('revisions',this)">Revision History</button>
+        <button class="detail-tab" onclick="switchDetailTab('activity',this)">กิจกรรม</button>
+      </div>
+      <!-- Tab: Info -->
+      <div id="detail-tab-info">
+        <div class="meta-grid" id="detail-meta" style="margin-bottom:14px"></div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px">
+          <div style="font-weight:700;color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Change Note (Rev ล่าสุด)</div>
+          <div style="color:var(--text2)" id="detail-changenote">—</div>
+        </div>
+      </div>
+      <!-- Tab: Revisions -->
+      <div id="detail-tab-revisions" style="display:none">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+          <button class="btn btn-primary btn-sm" onclick="closeModal('modal-detail');openModal('modal-new-revision')"><i data-lucide="git-branch"></i> สร้าง Revision ใหม่</button>
+        </div>
+        <div class="rev-timeline" id="detail-revs"></div>
+      </div>
+      <!-- Tab: Activity -->
+      <div id="detail-tab-activity" style="display:none">
+        <div class="history-list" id="detail-history"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-detail')">ปิด</button>
+      <button class="btn btn-ghost" onclick="showToast('กำลังดาวน์โหลด...','info')"><i data-lucide="download"></i> ดาวน์โหลด</button>
+      <button class="btn btn-ghost" onclick="closeModal('modal-detail');openModal('modal-new-revision')"><i data-lucide="git-branch"></i> สร้าง Revision</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-detail');location.href='02-approval.html'"><i data-lucide="send"></i> ส่งขออนุมัติ</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW REVISION MODAL -->
+<div class="modal-overlay" id="modal-new-revision">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title"><i data-lucide="git-branch" style="color:var(--accent)"></i> สร้าง Revision ใหม่</div>
+      <button class="modal-close" onclick="closeModal('modal-new-revision')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="card-sm" style="margin-bottom:16px;display:flex;align-items:center;gap:10px;background:var(--accent-dim);border-color:var(--accent-border)">
+        <div style="width:34px;height:34px;border-radius:8px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px"><i data-lucide="file-text"></i></div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--accent)" id="rev-doc-code">SOP-PRD-001</div>
+          <div style="font-size:11px;color:var(--text3)" id="rev-doc-name">ขั้นตอนการผลิตเม็ดยา Paracetamol 500mg</div>
+        </div>
+        <div style="margin-left:auto"><span class="badge badge-blue" id="rev-current">Rev 5 → Rev 6</span></div>
+      </div>
+
+      <!-- Upload new version -->
+      <div class="form-group">
+        <label class="form-label">อัปโหลดไฟล์ฉบับใหม่ *</label>
+        <div class="drop-zone" onclick="document.getElementById('rev-file-input').click()">
+          <i data-lucide="cloud-upload"></i>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:3px">ลากไฟล์มาวาง หรือคลิกเพื่อเลือก</div>
+          <div style="font-size:11px">PDF, DOCX · ไม่เกิน 50 MB</div>
+          <input type="file" id="rev-file-input" style="display:none" onchange="handleRevFile(this)">
+        </div>
+        <div id="rev-upload-preview" style="display:none;margin-top:8px">
+          <div class="card-sm" style="display:flex;align-items:center;gap:10px">
+            <div style="width:30px;height:30px;border-radius:6px;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center"><i data-lucide="file-text"></i></div>
+            <div style="flex:1"><div style="font-size:12px;font-weight:600" id="rev-filename">—</div><div class="progress-bar"><div class="progress-fill" id="rev-progress" style="width:0%"></div></div></div>
+            <span style="font-size:11px;color:var(--text3)" id="rev-pct">0%</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Revision ใหม่ *</label>
+          <input class="form-input" id="rev-number" placeholder="เช่น Rev 6" value="Rev 6">
+        </div>
+        <div class="form-group">
+          <label class="form-label">วันที่มีผล</label>
+          <input class="form-input" type="date" id="rev-date" value="2025-05-28">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Change Note (สรุปสิ่งที่เปลี่ยนแปลง) *</label>
+        <textarea class="form-input form-textarea" id="rev-changenote" placeholder="อธิบายการเปลี่ยนแปลงที่สำคัญจาก revision ก่อนหน้า เช่น &#10;- เพิ่มขั้นตอน X&#10;- แก้ค่า spec Y จาก A เป็น B&#10;- ลบขั้นตอน Z ที่ไม่จำเป็น" style="min-height:100px"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">ประเภทการเปลี่ยนแปลง</label>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          <label style="display:flex;align-items:center;gap:7px;padding:9px 10px;border:1.5px solid var(--border2);border-radius:8px;cursor:pointer;font-size:12px;transition:all .15s" id="change-minor">
+            <input type="radio" name="change-type" value="minor" checked onchange="selectChangeType(this)"> Minor (typo, format)
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;padding:9px 10px;border:1.5px solid var(--border2);border-radius:8px;cursor:pointer;font-size:12px;transition:all .15s" id="change-major">
+            <input type="radio" name="change-type" value="major" onchange="selectChangeType(this)"> Major (content)
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;padding:9px 10px;border:1.5px solid var(--border2);border-radius:8px;cursor:pointer;font-size:12px;transition:all .15s" id="change-critical">
+            <input type="radio" name="change-type" value="critical" onchange="selectChangeType(this)"> Critical (safety)
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Approval Workflow *</label>
+        <select class="form-input" id="rev-workflow">
+          <option>Standard: Author → QA → Manager → Director</option>
+          <option>Fast-track: Author → QA Manager (Minor change เท่านั้น)</option>
+          <option>Engineering: Author → Eng. Lead → Safety → ผจก.</option>
+        </select>
+        <div style="font-size:11px;color:var(--text3);margin-top:5px"><i data-lucide="info" style="width:12px;height:12px;vertical-align:middle"></i> Workflow จะถูกล็อกเมื่อส่ง — ไม่สามารถเปลี่ยนภายหลัง</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-new-revision')">ยกเลิก</button>
+      <button class="btn btn-ghost" onclick="saveRevDraft()"><i data-lucide="save"></i> บันทึก Draft</button>
+      <button class="btn btn-primary" onclick="submitRevision()"><i data-lucide="send"></i> ส่งขออนุมัติ</button>
+    </div>
+  </div>
+</div>
+
+<!-- UPLOAD MODAL -->
+<div class="modal-overlay" id="modal-upload">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i data-lucide="upload" style="color:var(--accent)"></i> อัปโหลดเอกสารใหม่</div>
+      <button class="modal-close" onclick="closeModal('modal-upload')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="drop-zone" onclick="document.getElementById('file-input').click()">
+        <i data-lucide="cloud-upload"></i>
+        <div style="font-size:14px;color:var(--text2);margin-bottom:4px">ลากไฟล์มาวาง หรือคลิกเพื่อเลือก</div>
+        <div style="font-size:11px">PDF, DOCX, XLSX · ไม่เกิน 50 MB</div>
+        <input type="file" id="file-input" style="display:none" onchange="handleFile(this)">
+      </div>
+      <div id="upload-preview" style="display:none;margin-top:10px">
+        <div class="card-sm" style="display:flex;align-items:center;gap:10px">
+          <div style="width:32px;height:32px;border-radius:7px;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center"><i data-lucide="file-text"></i></div>
+          <div style="flex:1"><div style="font-size:13px;font-weight:600" id="upload-filename">—</div><div class="progress-bar"><div class="progress-fill" id="upload-progress" style="width:0%"></div></div></div>
+          <span style="font-size:11px;color:var(--text3)" id="upload-pct">0%</span>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
+        <div class="form-group"><label class="form-label">รหัสเอกสาร *</label><input class="form-input" placeholder="เช่น SOP-PRD-099" id="up-code"></div>
+        <div class="form-group"><label class="form-label">หมวดหมู่ *</label><select class="form-input"><option>SOP</option><option>WI</option><option>FM</option></select></div>
+      </div>
+      <div class="form-group"><label class="form-label">ชื่อเอกสาร *</label><input class="form-input" placeholder="ระบุชื่อเต็มของเอกสาร" id="up-name"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group"><label class="form-label">แผนก</label><select class="form-input"><option>Production</option><option>QA / QC</option><option>Engineering</option><option>Warehouse</option></select></div>
+        <div class="form-group"><label class="form-label">Revision เริ่มต้น</label><input class="form-input" value="Rev 1"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Change Note</label><textarea class="form-input form-textarea" placeholder="อธิบายสิ่งที่เปลี่ยนแปลง..."></textarea></div>
+      <div class="form-group" style="margin-bottom:0"><label class="form-label">Approval Workflow</label>
+        <select class="form-input"><option>Standard: Author → QA → Manager → Director</option><option>Fast-track: Author → QA Manager</option><option>Engineering: Author → Eng. Lead → Safety</option></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-upload')">ยกเลิก</button>
+      <button class="btn btn-ghost" onclick="saveDraft()"><i data-lucide="save"></i> Draft</button>
+      <button class="btn btn-primary" onclick="submitUpload()"><i data-lucide="send"></i> ส่งขออนุมัติ</button>
+    </div>
+  </div>
+</div>
+
+<!-- BULK MODAL -->
+<div class="modal-overlay" id="modal-bulk">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <div class="modal-title"><i data-lucide="sliders-horizontal" style="color:var(--accent)"></i> Bulk Actions</div>
+      <button class="modal-close" onclick="closeModal('modal-bulk')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px">เลือก action สำหรับเอกสารที่เลือก</p>
+      <div style="display:grid;gap:6px">
+        <button class="btn btn-ghost" style="justify-content:flex-start;gap:10px" onclick="bulkAction('export')"><i data-lucide="download" style="color:var(--accent)"></i> Export PDF รวม</button>
+        <button class="btn btn-ghost" style="justify-content:flex-start;gap:10px" onclick="bulkAction('archive')"><i data-lucide="archive" style="color:var(--amber)"></i> Archive ทั้งหมด</button>
+        <button class="btn btn-ghost" style="justify-content:flex-start;gap:10px" onclick="bulkAction('obsolete')"><i data-lucide="ban" style="color:var(--text3)"></i> ตั้งเป็น Obsolete</button>
+        <button class="btn btn-ghost" style="justify-content:flex-start;gap:10px;color:var(--red)" onclick="bulkAction('delete')"><i data-lucide="trash-2" style="color:var(--red)"></i> ลบ (ต้องสิทธิ์ Admin)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<style>
+.detail-tab{padding:8px 16px;background:none;border:none;border-bottom:2px solid transparent;font-family:var(--font);font-size:13px;font-weight:500;color:var(--text3);cursor:pointer;transition:all .15s;margin-bottom:-1px}
+.detail-tab:hover{color:var(--text2)}
+.detail-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+</style>
+
+<script>
+const ITEMS_PER_PAGE = 5;
+let currentPage = 1;
+let filteredDocs = [];
+let currentDocId = null;
+
+const documents = [
+  {id:1,code:'SOP-PRD-001',name:'ขั้นตอนการผลิตเม็ดยา Paracetamol 500mg',cat:'SOP',rev:'Rev 5',revNum:5,status:'Active',dept:'Production',date:'28 พ.ค. 68',by:'สมชาย K.',
+   changeNote:'เพิ่มขั้นตอน Granulation ใหม่ตาม SOP-EQ-012 และแก้ไข IPC frequency จาก 2 ชม. เป็น 1 ชม.',
+   revs:[{n:'Rev 5',note:'เพิ่มขั้นตอน Granulation ใหม่ตาม SOP-EQ-012',by:'สมชาย K.',date:'28 พ.ค. 68',status:'Active'},{n:'Rev 4',note:'แก้ค่า temperature spec ตาม ICH Q10',by:'นภา P.',date:'15 มี.ค. 68',status:'Superseded'},{n:'Rev 3',note:'เพิ่ม IPC checklist ขั้นตอน compression',by:'วิภา S.',date:'02 ม.ค. 68',status:'Superseded'},{n:'Rev 2',note:'อัปเดต Raw Material spec',by:'สมชาย K.',date:'10 ส.ค. 67',status:'Superseded'}],
+   history:[{action:'APPROVED',by:'วิภา S.',date:'28 พ.ค. 68 14:22',color:'var(--green)'},{action:'SUBMITTED',by:'สมชาย K.',date:'28 พ.ค. 68 09:15',color:'var(--accent)'},{action:'VIEWED',by:'นภา P.',date:'27 พ.ค. 68 16:30',color:'var(--text3)'},{action:'EDITED',by:'สมชาย K.',date:'26 พ.ค. 68 11:00',color:'var(--text3)'}]},
+  {id:2,code:'WI-QC-015',name:'การตรวจสอบคุณภาพ In-process ไลน์ A',cat:'WI',rev:'Rev 2',revNum:2,status:'Pending',dept:'QA',date:'27 พ.ค. 68',by:'นภา P.',
+   changeNote:'เพิ่มการตรวจ Hardness ทุก 30 นาที และ Thickness ทุก 1 ชม.',
+   revs:[{n:'Rev 2',note:'เพิ่มการตรวจ Hardness ทุก 30 นาที',by:'นภา P.',date:'27 พ.ค. 68',status:'Pending'},{n:'Rev 1',note:'เอกสารฉบับแรก',by:'นภา P.',date:'10 ก.พ. 68',status:'Superseded'}],
+   history:[{action:'SUBMITTED',by:'นภา P.',date:'27 พ.ค. 68 10:30',color:'var(--accent)'},{action:'CREATED',by:'นภา P.',date:'25 พ.ค. 68 09:00',color:'var(--text3)'}]},
+  {id:3,code:'FM-QA-021',name:'Batch Record Template — Liquid Oral',cat:'FM',rev:'Rev 8',revNum:8,status:'Active',dept:'QA',date:'26 พ.ค. 68',by:'วิภา S.',
+   changeNote:'เพิ่ม column pH, Viscosity และ Conductivity ตาม spec ใหม่',
+   revs:[{n:'Rev 8',note:'เพิ่ม column pH และ Viscosity',by:'วิภา S.',date:'26 พ.ค. 68',status:'Active'},{n:'Rev 7',note:'แก้ layout signature block',by:'วิภา S.',date:'01 เม.ย. 68',status:'Superseded'}],
+   history:[{action:'APPROVED',by:'ผู้อำนวยการ',date:'26 พ.ค. 68 16:00',color:'var(--green)'},{action:'SUBMITTED',by:'วิภา S.',date:'26 พ.ค. 68 10:00',color:'var(--accent)'}]},
+  {id:4,code:'SOP-ENG-007',name:'Preventive Maintenance Compactor M-02',cat:'SOP',rev:'Rev 1',revNum:1,status:'Obsolete',dept:'Engineering',date:'20 พ.ค. 68',by:'อนุชา T.',
+   changeNote:'เอกสารถูก supersede โดย SOP-ENG-007B ซึ่งมีขั้นตอนครบถ้วนกว่า',
+   revs:[{n:'Rev 1',note:'เอกสารถูก supersede โดย SOP-ENG-007B',by:'อนุชา T.',date:'20 พ.ค. 68',status:'Obsolete'}],
+   history:[{action:'OBSOLETED',by:'ผู้จัดการ',date:'20 พ.ค. 68 11:00',color:'var(--text3)'}]},
+  {id:5,code:'WI-PRD-042',name:'การตั้งค่าเครื่อง Tablet Press Fette 2090',cat:'WI',rev:'Rev 3',revNum:3,status:'Active',dept:'Production',date:'28 พ.ค. 68',by:'สมชาย K.',
+   changeNote:'อัปเดต punch clearance spec และเพิ่ม troubleshooting guide',
+   revs:[{n:'Rev 3',note:'อัปเดต punch clearance spec',by:'สมชาย K.',date:'28 พ.ค. 68',status:'Active'},{n:'Rev 2',note:'เพิ่ม CIP procedure',by:'อนุชา T.',date:'14 มี.ค. 68',status:'Superseded'}],
+   history:[{action:'APPROVED',by:'วิภา S.',date:'28 พ.ค. 68 10:42',color:'var(--green)'},{action:'SUBMITTED',by:'สมชาย K.',date:'28 พ.ค. 68 09:10',color:'var(--accent)'}]},
+  {id:6,code:'SOP-ENG-022',name:'การ Calibrate เครื่องชั่ง Class II',cat:'SOP',rev:'Rev 1',revNum:1,status:'Draft',dept:'Engineering',date:'24 พ.ค. 68',by:'อนุชา T.',
+   changeNote:'ร่างครั้งแรก — ขั้นตอน Calibrate ตาม OIML R 76',
+   revs:[{n:'Rev 1',note:'ร่างครั้งแรก รอ review',by:'อนุชา T.',date:'24 พ.ค. 68',status:'Draft'}],
+   history:[{action:'CREATED',by:'อนุชา T.',date:'24 พ.ค. 68 14:30',color:'var(--text3)'}]},
+  {id:7,code:'FM-WH-003',name:'Receiving Checklist — Raw Material',cat:'FM',rev:'Rev 4',revNum:4,status:'Active',dept:'Warehouse',date:'22 พ.ค. 68',by:'พิมพ์ W.',
+   changeNote:'เพิ่ม column Certificate of Analysis และ COO',
+   revs:[{n:'Rev 4',note:'เพิ่ม column Certificate of Analysis',by:'พิมพ์ W.',date:'22 พ.ค. 68',status:'Active'}],
+   history:[{action:'APPROVED',by:'ผู้จัดการ',date:'22 พ.ค. 68 15:20',color:'var(--green)'}]},
+  {id:8,code:'SOP-QC-008',name:'การทดสอบ Dissolution ตาม USP <711>',cat:'SOP',rev:'Rev 1',revNum:1,status:'Pending',dept:'QA',date:'25 พ.ค. 68',by:'นภา P.',
+   changeNote:'เอกสารใหม่ — Dissolution testing method development',
+   revs:[{n:'Rev 1',note:'เอกสารใหม่ รอ approve',by:'นภา P.',date:'25 พ.ค. 68',status:'Pending'}],
+   history:[{action:'SUBMITTED',by:'นภา P.',date:'25 พ.ค. 68 13:45',color:'var(--accent)'}]},
+  {id:9,code:'WI-PRD-031',name:'การ Setup เครื่อง Coating Driacoater',cat:'WI',rev:'Rev 6',revNum:6,status:'Active',dept:'Production',date:'18 พ.ค. 68',by:'สมชาย K.',
+   changeNote:'อัปเดต inlet temperature range ตาม validation study ล่าสุด',
+   revs:[{n:'Rev 6',note:'อัปเดต inlet temperature range',by:'สมชาย K.',date:'18 พ.ค. 68',status:'Active'}],
+   history:[{action:'APPROVED',by:'ผู้จัดการ',date:'18 พ.ค. 68 09:00',color:'var(--green)'}]},
+  {id:10,code:'SOP-PRD-012',name:'การ Cleaning เครื่อง Granulator รุ่น PMA',cat:'SOP',rev:'Rev 3',revNum:3,status:'Active',dept:'Production',date:'15 พ.ค. 68',by:'สมชาย K.',
+   changeNote:'แก้ washing solution concentration จาก 2% เป็น 1.5% IPA',
+   revs:[{n:'Rev 3',note:'แก้ washing solution concentration',by:'สมชาย K.',date:'15 พ.ค. 68',status:'Active'}],
+   history:[{action:'APPROVED',by:'วิภา S.',date:'15 พ.ค. 68 11:30',color:'var(--green)'}]},
+];
+
+// ===== SIDEBAR =====
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('collapsed');}
+
+// ===== MODAL =====
+function openModal(id){document.getElementById(id).classList.add('open');lucide.createIcons();}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');}));
+
+// ===== FILTER / CHIP =====
+function setChip(el,cat){
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('cat-filter').value=cat;
+  filterDocs();
+}
+function filterDocs(){
+  const cat=document.getElementById('cat-filter').value;
+  const status=document.getElementById('status-filter').value;
+  const dept=document.getElementById('dept-filter').value;
+  filteredDocs=documents.filter(d=>{
+    const mc=!cat||d.cat===cat;
+    const ms=!status||d.status===status;
+    const md=!dept||(dept==='QA'&&d.dept==='QA')||d.dept.includes(dept);
+    return mc&&ms&&md;
+  });
+  currentPage=1;
+  renderPage();
+}
+
+// ===== PAGINATION =====
+function renderPage(){
+  const total=filteredDocs.length;
+  const pages=Math.max(1,Math.ceil(total/ITEMS_PER_PAGE));
+  currentPage=Math.min(currentPage,pages);
+  const start=(currentPage-1)*ITEMS_PER_PAGE;
+  const slice=filteredDocs.slice(start,start+ITEMS_PER_PAGE);
+  document.getElementById('doc-count').textContent=`แสดง ${total} รายการ`;
+  document.getElementById('page-range').textContent=`${total?start+1:0}–${Math.min(start+ITEMS_PER_PAGE,total)}`;
+  document.getElementById('total-count').textContent=total;
+  renderDocs(slice);
+  renderPagination(pages);
+}
+function renderPagination(pages){
+  const el=document.getElementById('pagination');
+  let html='';
+  html+=`<button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}><i data-lucide="chevron-left" style="width:13px;height:13px"></i></button>`;
+  for(let i=1;i<=pages;i++){
+    if(pages>7&&i>2&&i<pages-1&&Math.abs(i-currentPage)>1){if(i===3||i===pages-2)html+=`<span style="padding:0 4px;color:var(--text3);font-size:12px">…</span>`;continue;}
+    html+=`<button class="page-btn${i===currentPage?' active':''}" onclick="goPage(${i})">${i}</button>`;
+  }
+  html+=`<button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===pages?'disabled':''}><i data-lucide="chevron-right" style="width:13px;height:13px"></i></button>`;
+  el.innerHTML=html;
+  lucide.createIcons();
+}
+function goPage(p){
+  const pages=Math.max(1,Math.ceil(filteredDocs.length/ITEMS_PER_PAGE));
+  if(p<1||p>pages)return;
+  currentPage=p;
+  renderPage();
+}
+
+// ===== RENDER TABLE =====
+function renderDocs(data){
+  const tbody=document.getElementById('doc-tbody');
+  tbody.innerHTML='';
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--text3)"><i data-lucide="file-x" style="width:28px;height:28px;display:block;margin:0 auto 8px"></i>ไม่พบเอกสาร</td></tr>`;lucide.createIcons();return;}
+  const sb={Active:'badge-green',Pending:'badge-amber',Draft:'badge-blue',Obsolete:'badge-gray'};
+  const iconMap={SOP:'file-text',WI:'file-text',FM:'sheet'};
+  data.forEach(d=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td style="width:32px"><input type="checkbox" class="row-check" style="cursor:pointer"></td>
+      <td><span class="tag">${d.code}</span></td>
+      <td><div class="doc-name" style="cursor:pointer" onclick="openDetail(${d.id})">
+        <i data-lucide="${iconMap[d.cat]||'file-text'}" style="width:15px;height:15px;color:var(--accent);flex-shrink:0"></i>${d.name}</div></td>
+      <td><span class="badge badge-gray">${d.cat}</span></td>
+      <td><span style="font-family:var(--mono);font-size:11px;color:var(--text2);font-weight:500">${d.rev}</span></td>
+      <td><span class="badge ${sb[d.status]||'badge-gray'}">${d.status}</span></td>
+      <td style="font-size:12px;color:var(--text2)">${d.dept}</td>
+      <td style="font-size:12px;color:var(--text3)">${d.date}</td>
+      <td style="font-size:12px;color:var(--text2)">${d.by}</td>
+      <td><div class="action-menu">
+        <button class="btn btn-ghost btn-xs" onclick="openDetail(${d.id})" title="ดูรายละเอียด"><i data-lucide="eye" style="width:13px;height:13px"></i></button>
+        <button class="btn btn-ghost btn-xs" onclick="showToast('ดาวน์โหลด ${d.code}','info')" title="ดาวน์โหลด"><i data-lucide="download" style="width:13px;height:13px"></i></button>
+        <button class="btn btn-ghost btn-xs" onclick="openRevisionFor(${d.id})" title="สร้าง Revision"><i data-lucide="git-branch" style="width:13px;height:13px"></i></button>
+        <button class="btn btn-ghost btn-xs" onclick="showToast('Context: Archive / Share / Delete','info')" title="เพิ่มเติม"><i data-lucide="ellipsis-vertical" style="width:13px;height:13px"></i></button>
+      </div></td>`;
+    tbody.appendChild(tr);
+  });
+  lucide.createIcons();
+}
+
+// ===== DETAIL MODAL =====
+function openDetail(id){
+  const d=documents.find(x=>x.id===id); if(!d)return;
+  currentDocId=id;
+  document.getElementById('detail-code').textContent=d.code;
+  document.getElementById('detail-name').textContent=d.name;
+  const sb={Active:'badge-green',Pending:'badge-amber',Draft:'badge-blue',Obsolete:'badge-gray'};
+  document.getElementById('detail-badges').innerHTML=
+    `<span class="badge ${sb[d.status]||'badge-gray'}">${d.status}</span><span class="badge badge-blue">${d.rev}</span><span class="badge badge-gray">${d.cat}</span>`;
+  document.getElementById('detail-meta').innerHTML=`
+    <div class="meta-item"><div class="meta-key">รหัสเอกสาร</div><div class="meta-val" style="font-family:var(--mono);font-size:12px">${d.code}</div></div>
+    <div class="meta-item"><div class="meta-key">Revision ปัจจุบัน</div><div class="meta-val" style="font-family:var(--mono);font-size:12px">${d.rev}</div></div>
+    <div class="meta-item"><div class="meta-key">แผนก</div><div class="meta-val" style="font-size:12px">${d.dept}</div></div>
+    <div class="meta-item"><div class="meta-key">แก้ไขล่าสุด</div><div class="meta-val" style="font-size:12px">${d.date} โดย ${d.by}</div></div>`;
+  document.getElementById('detail-changenote').textContent=d.changeNote||'—';
+  document.getElementById('detail-revs').innerHTML=d.revs.map((r,i)=>`
+    <div class="rev-item${i===0?' current':''}">
+      <div style="display:flex;align-items:center;gap:7px"><span class="rev-num">${r.n}</span><span class="badge ${i===0?'badge-green':'badge-gray'}" style="font-size:9px">${r.status}</span></div>
+      <div class="rev-note">${r.note}</div>
+      <div class="rev-meta">${r.by} · ${r.date}</div>
+    </div>`).join('');
+  document.getElementById('detail-history').innerHTML=d.history.map(h=>`
+    <div class="history-item">
+      <div class="history-avatar">${h.by.substring(0,2)}</div>
+      <div><span style="font-weight:700;color:${h.color};font-size:11px">${h.action}</span> <span style="color:var(--text2);font-size:11px">โดย ${h.by}</span><div style="font-size:10px;color:var(--text3)">${h.date}</div></div>
+    </div>`).join('');
+  // reset tab
+  switchDetailTab('info',document.querySelector('.detail-tab'));
+  openModal('modal-detail');
+}
+function switchDetailTab(tab, btn){
+  document.querySelectorAll('.detail-tab').forEach(t=>t.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  ['info','revisions','activity'].forEach(t=>{
+    document.getElementById('detail-tab-'+t).style.display=t===tab?'block':'none';
+  });
+}
+
+// ===== REVISION MODAL =====
+function openRevisionFor(id){
+  const d=documents.find(x=>x.id===id)||documents[0];
+  currentDocId=id;
+  document.getElementById('rev-doc-code').textContent=d.code;
+  document.getElementById('rev-doc-name').textContent=d.name;
+  document.getElementById('rev-number').value='Rev '+(d.revNum+1);
+  document.getElementById('rev-current').textContent=`${d.rev} → Rev ${d.revNum+1}`;
+  document.getElementById('rev-changenote').value='';
+  document.getElementById('rev-upload-preview').style.display='none';
+  openModal('modal-new-revision');
+}
+function handleRevFile(input){
+  if(!input.files.length)return;
+  document.getElementById('rev-filename').textContent=input.files[0].name;
+  document.getElementById('rev-upload-preview').style.display='block';
+  lucide.createIcons();
+  let pct=0;
+  const iv=setInterval(()=>{pct+=12;document.getElementById('rev-progress').style.width=Math.min(pct,100)+'%';document.getElementById('rev-pct').textContent=Math.min(pct,100)+'%';if(pct>=100){clearInterval(iv);showToast('อัปโหลดสำเร็จ','success');}},70);
+}
+function selectChangeType(radio){
+  document.querySelectorAll('[id^="change-"]').forEach(l=>l.style.borderColor='var(--border2)');
+  const map={minor:'var(--accent)',major:'var(--amber)',critical:'var(--red)'};
+  document.getElementById('change-'+radio.value).style.borderColor=map[radio.value]||'var(--accent)';
+}
+function saveRevDraft(){closeModal('modal-new-revision');showToast('บันทึก Draft revision เรียบร้อย','info');}
+function submitRevision(){
+  if(!document.getElementById('rev-changenote').value.trim()){showToast('กรุณากรอก Change Note','error');return;}
+  closeModal('modal-new-revision');
+  showToast('ส่งขออนุมัติ Revision เรียบร้อย — Workflow เริ่มทำงานแล้ว','success');
+}
+
+// ===== GLOBAL SEARCH =====
+function openSearch(){
+  document.getElementById('search-overlay').classList.add('open');
+  setTimeout(()=>document.getElementById('global-search-input').focus(),50);
+}
+function closeSearchModal(){document.getElementById('search-overlay').classList.remove('open');}
+function closeSearch(e){if(e.target===document.getElementById('search-overlay'))closeSearchModal();}
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();openSearch();}
+  if(e.key==='Escape')closeSearchModal();
+});
+function globalSearch(q){
+  const wrap=document.getElementById('search-results-wrap');
+  if(!q.trim()){wrap.innerHTML='<div class="search-hint">พิมพ์เพื่อค้นหา</div>';return;}
+  const results=documents.filter(d=>d.code.toLowerCase().includes(q.toLowerCase())||d.name.toLowerCase().includes(q.toLowerCase())||d.dept.toLowerCase().includes(q.toLowerCase()));
+  if(!results.length){wrap.innerHTML='<div class="search-hint"><i data-lucide="search-x" style="width:14px;height:14px;vertical-align:middle"></i> ไม่พบผลลัพธ์สำหรับ "'+q+'"</div>';lucide.createIcons();return;}
+  const sb={Active:'badge-green',Pending:'badge-amber',Draft:'badge-blue',Obsolete:'badge-gray'};
+  wrap.innerHTML=results.map(d=>`
+    <div class="search-result-item" onclick="closeSearchModal();openDetail(${d.id})">
+      <i data-lucide="file-text" style="width:16px;height:16px;color:var(--accent);flex-shrink:0"></i>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-weight:600;font-family:var(--mono);font-size:12px">${d.code}</span>
+          <span class="badge ${sb[d.status]||'badge-gray'}" style="font-size:9px">${d.status}</span>
+          <span class="badge badge-blue" style="font-size:9px">${d.rev}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.name}</div>
+      </div>
+      <span style="font-size:10px;color:var(--text3);flex-shrink:0">${d.dept}</span>
+    </div>`).join('')+`<div style="padding:8px 16px;font-size:11px;color:var(--text3);text-align:center">${results.length} ผลลัพธ์</div>`;
+  lucide.createIcons();
+}
+
+// ===== UPLOAD =====
+function handleFile(input){
+  if(!input.files.length)return;
+  document.getElementById('upload-filename').textContent=input.files[0].name;
+  document.getElementById('upload-preview').style.display='block';
+  lucide.createIcons();
+  let pct=0;
+  const iv=setInterval(()=>{pct+=10;document.getElementById('upload-progress').style.width=pct+'%';document.getElementById('upload-pct').textContent=pct+'%';if(pct>=100){clearInterval(iv);showToast('อัปโหลดสำเร็จ','success');}},80);
+}
+function saveDraft(){closeModal('modal-upload');showToast('บันทึก Draft เรียบร้อย','info');}
+function submitUpload(){
+  if(!document.getElementById('up-code').value||!document.getElementById('up-name').value){showToast('กรุณากรอกข้อมูลให้ครบ','error');return;}
+  closeModal('modal-upload');showToast('ส่งขออนุมัติเรียบร้อย — Workflow เริ่มทำงานแล้ว','success');
+}
+function toggleAll(cb){document.querySelectorAll('.row-check').forEach(c=>c.checked=cb.checked);}
+function bulkAction(t){closeModal('modal-bulk');const m={export:'Export PDF เรียบร้อย',archive:'Archive สำเร็จ',obsolete:'ตั้งเป็น Obsolete แล้ว',delete:'ลบสำเร็จ'};showToast(m[t],'success');}
+
+// ===== TOAST =====
+function showToast(msg,type='info'){
+  const wrap=document.getElementById('toast-wrap');
+  const t=document.createElement('div');t.className='toast '+type;
+  const icons={success:'circle-check',error:'alert-circle',info:'info'};
+  const colors={success:'var(--green)',error:'var(--red)',info:'var(--accent)'};
+  t.innerHTML=`<i data-lucide="${icons[type]}" style="width:16px;height:16px;color:${colors[type]};flex-shrink:0"></i><span>${msg}</span>`;
+  wrap.appendChild(t);lucide.createIcons();
+  setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(20px)';t.style.transition='.2s';setTimeout(()=>t.remove(),200);},3000);
+}
+
+// ===== INIT =====
+document.addEventListener('DOMContentLoaded',()=>{
+  filteredDocs=[...documents];
+  renderPage();
+  lucide.createIcons();
+});
+
+// ── Role-aware init ──
+document.addEventListener('DOMContentLoaded', () => {
+  buildSidebar('01-document-store');
+  DMS_applyRoleUI();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+});
+</script>
+</body>
+</html>

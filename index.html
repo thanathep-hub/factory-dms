@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Factory DMS — Prototype Index</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;background:#f0f2f7;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px}
+.wrap{max-width:720px;width:100%}
+.top{text-align:center;margin-bottom:28px}
+.logo{width:52px;height:52px;background:#2563eb;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff;margin:0 auto 14px}
+h1{font-size:22px;font-weight:700;color:#1a1d2e;margin-bottom:4px}
+.sub{font-size:13px;color:#9096b2}
+.section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#9096b2;margin:18px 0 8px;display:flex;align-items:center;gap:6px}
+.section-label::after{content:'';flex:1;height:1px;background:#e4e6ec}
+.cards{display:grid;gap:7px}
+.file-card{background:#fff;border:1px solid rgba(0,0,0,0.09);border-radius:12px;padding:13px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all .15s;text-decoration:none;box-shadow:0 1px 3px rgba(0,0,0,0.05)}
+.file-card:hover{border-color:#2563eb;box-shadow:0 4px 14px rgba(37,99,235,0.12);transform:translateY(-1px)}
+.file-icon{width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.file-info{flex:1;min-width:0}
+.file-name{font-size:13px;font-weight:700;color:#1a1d2e;margin-bottom:2px}
+.file-desc{font-size:11px;color:#9096b2;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arrow{color:#9096b2;flex-shrink:0}
+.badge-new{font-size:9px;background:#16a34a;color:#fff;padding:1px 6px;border-radius:99px;font-weight:700;margin-left:5px;vertical-align:middle}
+.badge-upd{font-size:9px;background:#b45309;color:#fff;padding:1px 6px;border-radius:99px;font-weight:700;margin-left:5px;vertical-align:middle}
+.role-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:20px}
+.role-box{border-radius:10px;padding:10px 8px;text-align:center;border:1px solid rgba(0,0,0,0.07);background:#fff}
+.role-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;margin:0 auto 5px}
+.role-name{font-size:10px;font-weight:700;color:#1a1d2e;margin-bottom:1px}
+.role-sub{font-size:9px;color:#9096b2}
+.note{margin-top:18px;background:#f0f4ff;border:1px solid rgba(37,99,235,.18);border-radius:10px;padding:12px 16px;font-size:12px;color:#4b5068;line-height:1.7}
+.note code{background:rgba(37,99,235,.08);padding:1px 5px;border-radius:4px;font-size:11px;color:#2563eb}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="logo">DM</div>
+    <h1>Factory DMS · Prototype v3</h1>
+    <div class="sub">Role-based UI · 5 roles · 10 หน้าจอ · เปิดได้ตรงใน browser</div>
+  </div>
+
+  <!-- Role overview -->
+  <div class="section-label"><i data-lucide="users" style="width:13px;height:13px"></i> Demo Roles — Login แล้วระบบจะปรับ UI ตาม role อัตโนมัติ</div>
+  <div class="role-grid">
+    <div class="role-box">
+      <div class="role-avatar" style="background:#16a34a">AT</div>
+      <div class="role-name">พนักงาน</div>
+      <div class="role-sub">อนุชา ทองดี<br>4 หน้าจอ</div>
+    </div>
+    <div class="role-box">
+      <div class="role-avatar" style="background:#2563eb">SK</div>
+      <div class="role-name">ผู้จัดการ</div>
+      <div class="role-sub">สมชาย กิตติ<br>6 หน้าจอ</div>
+    </div>
+    <div class="role-box">
+      <div class="role-avatar" style="background:#7c3aed">NP</div>
+      <div class="role-name">QA Manager</div>
+      <div class="role-sub">นภา พงษ์สวัสดิ์<br>6 หน้าจอ</div>
+    </div>
+    <div class="role-box">
+      <div class="role-avatar" style="background:#b45309">DI</div>
+      <div class="role-name">ผู้อำนวยการ</div>
+      <div class="role-sub">วิชัย ศิริพงษ์<br>6 หน้าจอ</div>
+    </div>
+    <div class="role-box">
+      <div class="role-avatar" style="background:#dc2626">AD</div>
+      <div class="role-name">Admin</div>
+      <div class="role-sub">Admin System<br>6 หน้าจอ</div>
+    </div>
+  </div>
+
+  <!-- Entry point -->
+  <div class="section-label"><i data-lucide="log-in" style="width:13px;height:13px"></i> จุดเริ่มต้น</div>
+  <div class="cards">
+    <a class="file-card" href="00-login.html">
+      <div class="file-icon" style="background:rgba(37,99,235,.1);color:#2563eb"><i data-lucide="log-in"></i></div>
+      <div class="file-info">
+        <div class="file-name">00-login.html <span class="badge-upd">UPDATED</span></div>
+        <div class="file-desc">Demo accounts quick-select · 5 roles · SSO · Session management · Route ตาม role อัตโนมัติ</div>
+      </div>
+      <i data-lucide="arrow-right" class="arrow"></i>
+    </a>
+  </div>
+
+  <!-- Manager pages -->
+  <div class="section-label"><i data-lucide="shield" style="width:13px;height:13px"></i> หน้าจอ ผู้จัดการ / QA / Director / Admin</div>
+  <div class="cards">
+    <a class="file-card" href="00-dashboard.html">
+      <div class="file-icon" style="background:rgba(124,58,237,.08);color:#7c3aed"><i data-lucide="layout-dashboard"></i></div>
+      <div class="file-info"><div class="file-name">00-dashboard.html</div><div class="file-desc">KPI · กราฟ activity · รายการด่วน · แยกตามแผนก</div></div>
+      <i data-lucide="arrow-right" class="arrow"></i>
+    </a>
+    <a class="file-card" href="01-document-store.html">
+      <div class="file-icon" style="background:rgba(22,163,74,.08);color:#16a34a"><i data-lucide="files"></i></div>
+      <div class="file-info"><div class="file-name">01-document-store.html</div><div class="file-desc">Search Ctrl+K · Filter · Pagination · Detail Modal · Create Revision</div></div>
+      <i data-lucide="arrow-right" class="arrow"></i>
+    </a>
+    <a class="file-card" href="02-approval.html">
+      <div class="file-icon" style="background:rgba(180,83,9,.08);color:#b45309"><i data-lucide="check-check"></i></div>
+      <div class="file-info"><div class="file-name">02-approval.html</div><div class="file-desc">Table workflow · Role banner · Approve checklist · Reject form · Bulk actions</div></div>
+      <i data-lucide="arrow-right" class="arrow"></i>
+    </a>
+    <a class="file-card" href="03-revision-control.html">
+      <div class="file-icon" style="background:rgba(37,99,235,.08);color:#2563eb"><i data-lucide="git-branch"></i></div>
+      <div class="file-info"><div class="file-name">03-revision-control.html</div><div class="file-desc">Timeline · Diff view (LCS) · Word diff · Restore revision</div></div>
+      <i data-lucide="arrow-right" class="arrow"></i>
+    </a>
+    <a class="file-card" href="04-audit-log.html">
+      <div class="file-icon" style="background:rgba(22,163,74,.08);color:#16a34a"><i data-lucide="clipboard-list"></i></div>
+      <div class="file-info"><div class="file-name">04-audit-log.html</div><div class="file-desc">40+ logs · SHA-256 Hash Chain · Filter · Tamper-proof · Export CSV/PDF/JSON</div></div>
+      <i data-lucide="arrow-right" class="arrow"></i>
+    </a>
+    <a class="file-card" href="05-notification.html">
+      <div class="file-icon" style="background:rgba(124,58,237,.08);color:#7c3aed"><i data-lucide="bell"></i></div>
+      <div class="file-info"><div class="file-name">05-notification.html</div><div class="file-desc">Inbox unread/read · Channel settings · 10 Event triggers · Quiet Hours</div></div>
+      <i data-lucide="arrow-right" class="arrow"></i>
+    </a>
+  </div>
+
+  <!-- Operator pages -->
+  <div class="section-label"><i data-lucide="user" style="width:13px;height:13px"></i> หน้าจอ พนักงานทั่วไป (Operator)</div>
+  <div class="cards">
+    <a class="file-card" href="emp-01-my-documents.html">
+      <div class="file-icon" style="background:rgba(22,163,74,.08);color:#16a34a"><i data-lucide="file-text"></i></div>
+      <div class="file-info"><div class="file-name">emp-01-my-documents.html</div><div class="file-desc">เอกสารของฉัน · ติดตาม revision ที่ส่ง · Quick actions</div></div>
+      <i data-lucide="arrow-right" class="arrow"></i>
+    </a>
+    <a class="file-card" href="emp-02-browse.html">
+      <div class="file-icon" style="background:rgba(37,99,235,.08);color:#2563eb"><i data-lucide="search"></i></div>
+      <div class="file-info"><div class="file-name">emp-02-browse.html</div><div class="file-desc">ค้นหาเอกสาร Active ของโรงงาน · ดาวน์โหลด · Read-only</div></div>
+      <i data-lucide="arrow-right" class="arrow"></i>
+    </a>
+    <a class="file-card" href="emp-03-tracking.html">
+      <div class="file-icon" style="background:rgba(180,83,9,.08);color:#b45309"><i data-lucide="git-branch"></i></div>
+      <div class="file-info"><div class="file-name">emp-03-tracking.html</div><div class="file-desc">ติดตามสถานะ Approval ของเอกสารที่ส่ง · ดูความคืบหน้า</div></div>
+      <i data-lucide="arrow-right" class="arrow"></i>
+    </a>
+    <a class="file-card" href="emp-04-notification.html">
+      <div class="file-icon" style="background:rgba(124,58,237,.08);color:#7c3aed"><i data-lucide="bell"></i></div>
+      <div class="file-info"><div class="file-name">emp-04-notification.html</div><div class="file-desc">แจ้งเตือนสำหรับพนักงาน · สถานะ revision · ข้อความจาก QA</div></div>
+      <i data-lucide="arrow-right" class="arrow"></i>
+    </a>
+  </div>
+
+  <!-- Shared -->
+  <div class="section-label"><i data-lucide="package" style="width:13px;height:13px"></i> Shared Assets</div>
+  <div class="cards">
+    <div class="file-card" style="cursor:default">
+      <div class="file-icon" style="background:rgba(0,0,0,0.04);color:#9096b2"><i data-lucide="file-code-2"></i></div>
+      <div class="file-info"><div class="file-name">shared.css</div><div class="file-desc">Design system · Light mode · Sarabun · CSS variables · Components</div></div>
+    </div>
+    <div class="file-card" style="cursor:default">
+      <div class="file-icon" style="background:rgba(0,0,0,0.04);color:#9096b2"><i data-lucide="file-code-2"></i></div>
+      <div class="file-info"><div class="file-name">session.js <span class="badge-new">NEW</span></div><div class="file-desc">Role session · Permissions · DMS_setSession / DMS_getRole / DMS_applyRoleUI</div></div>
+    </div>
+    <div class="file-card" style="cursor:default">
+      <div class="file-icon" style="background:rgba(0,0,0,0.04);color:#9096b2"><i data-lucide="file-code-2"></i></div>
+      <div class="file-info"><div class="file-name">sidebar.js <span class="badge-new">NEW</span></div><div class="file-desc">Dynamic sidebar · Role-aware nav · buildSidebar(pageId) · logout</div></div>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>วิธีใช้:</strong> วางทุกไฟล์ในโฟลเดอร์เดียวกัน → เปิด <code>00-login.html</code> → เลือก Demo Account → ระบบจะ route และปรับ UI ตาม role อัตโนมัติ<br>
+    <strong>Role switching:</strong> กลับไป <code>00-login.html</code> แล้วเลือก account ใหม่ได้ตลอด · Session เก็บใน <code>sessionStorage</code> ไม่มี backend จริง<br>
+    <strong>ไฟล์ทั้งหมด:</strong> 12 HTML + shared.css + session.js + sidebar.js = 14 ไฟล์
+  </div>
+</div>
+<script>document.addEventListener('DOMContentLoaded',()=>lucide.createIcons());</script>
+</body>
+</html>

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Factory DMS — แจ้งเตือน</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="session.js"></script>
+<script src="sidebar.js"></script>
+<link rel="stylesheet" href="shared.css">
+<style>
+.emp-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(22,163,74,.1);color:var(--green);border:1px solid rgba(22,163,74,.2)}
+.notif-item{display:flex;gap:12px;padding:13px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;position:relative}
+.notif-item:hover{background:var(--bg3)}
+.notif-item.unread{background:rgba(37,99,235,.03)}
+.notif-item.unread::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:0 2px 2px 0;background:var(--accent)}
+.notif-item:last-child{border-bottom:none}
+.notif-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.unread-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-top:6px}
+.toggle{position:relative;width:38px;height:20px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;inset:0;background:var(--bg4);border-radius:99px;cursor:pointer;transition:.2s;border:1px solid var(--border2)}
+.toggle-slider::before{content:'';position:absolute;width:14px;height:14px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.toggle input:checked+.toggle-slider{background:var(--accent);border-color:var(--accent)}
+.toggle input:checked+.toggle-slider::before{transform:translateX(18px)}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="btn btn-ghost btn-sm" onclick="toggleSidebar()" style="padding:5px 8px"><i data-lucide="menu"></i></button>
+      <span id="topbar-role" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;margin-right:4px"></span><div class="page-title">แจ้งเตือน <span class="page-sub">Notifications</span></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-ghost btn-sm" onclick="markAllRead()"><i data-lucide="check-check"></i> อ่านทั้งหมด</button>
+        <div class="avatar" style="cursor:pointer" onclick="location.href='00-login.html'">AT</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div style="display:grid;grid-template-columns:1fr 320px;gap:16px;align-items:start">
+
+        <!-- LEFT: Inbox -->
+        <div>
+          <div class="card" style="padding:0;overflow:hidden">
+            <div style="padding:0 4px;border-bottom:1px solid var(--border)">
+              <div style="display:flex;gap:0">
+                <button class="inbox-tab active" onclick="switchTab('all',this)">ทั้งหมด <span id="cnt-all" style="font-size:10px;background:var(--bg4);color:var(--text3);padding:1px 6px;border-radius:99px;font-family:var(--mono)">—</span></button>
+                <button class="inbox-tab" onclick="switchTab('unread',this)">ยังไม่อ่าน <span id="cnt-unread" style="font-size:10px;background:var(--accent-dim);color:var(--accent);padding:1px 6px;border-radius:99px;font-family:var(--mono)">—</span></button>
+              </div>
+            </div>
+            <div id="notif-list" style="max-height:600px;overflow-y:auto"></div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Channel settings (simplified) -->
+        <div>
+          <div class="card">
+            <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+              <i data-lucide="settings" style="width:13px;height:13px;color:var(--accent)"></i> ตั้งค่าการแจ้งเตือน
+            </div>
+            <!-- Channels -->
+            <div style="margin-bottom:14px">
+              <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:7px">ช่องทาง</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+                <div style="display:flex;align-items:center;gap:7px;font-size:13px"><i data-lucide="bell" style="width:14px;height:14px;color:var(--accent)"></i> In-app</div>
+                <label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+                <div style="display:flex;align-items:center;gap:7px;font-size:13px"><i data-lucide="mail" style="width:14px;height:14px;color:var(--green)"></i> Email</div>
+                <label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+                <div style="display:flex;align-items:center;gap:7px;font-size:13px"><i data-lucide="message-circle" style="width:14px;height:14px;color:#06b25f"></i> Line OA</div>
+                <button class="btn btn-ghost btn-sm" onclick="showToast('เชื่อมต่อ Line OA — สแกน QR ในหน้าตั้งค่า','info')" style="font-size:11px">เชื่อมต่อ</button>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0">
+                <div style="display:flex;align-items:center;gap:7px;font-size:13px"><i data-lucide="smartphone" style="width:14px;height:14px;color:var(--purple)"></i> SMS</div>
+                <button class="btn btn-ghost btn-sm" onclick="showToast('ตั้งค่า SMS — ใส่เบอร์โทรในหน้าตั้งค่า','info')" style="font-size:11px">ตั้งค่า</button>
+              </div>
+            </div>
+            <!-- Events -->
+            <div>
+              <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:7px">รับแจ้งเตือนสำหรับ</div>
+              ${[
+                {label:'เอกสารของฉันได้รับอนุมัติ', on:true},
+                {label:'เอกสารถูกส่งกลับแก้ไข', on:true},
+                {label:'Workflow เริ่มดำเนินการ', on:true},
+                {label:'เอกสารใกล้หมดอายุ Review', on:true},
+                {label:'มีคน Mention ฉัน', on:false},
+                {label:'สรุปกิจกรรมประจำวัน', on:false},
+              ].map(e=>`
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+                <span style="font-size:12px;color:var(--text2)">${e.label}</span>
+                <label class="toggle"><input type="checkbox" ${e.on?'checked':''}><span class="toggle-slider"></span></label>
+              </div>`).join('')}
+            </div>
+            <div style="margin-top:12px;text-align:right">
+              <button class="btn btn-primary btn-sm" onclick="showToast('บันทึกการตั้งค่าแล้ว','success')"><i data-lucide="save"></i> บันทึก</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+</div>
+<div class="toast-wrap" id="toast-wrap"></div>
+<style>
+.inbox-tab{padding:9px 16px;background:none;border:none;border-bottom:2px solid transparent;font-family:var(--font);font-size:13px;font-weight:600;color:var(--text3);cursor:pointer;transition:all .15s;margin-bottom:-1px}
+.inbox-tab:hover{color:var(--text2)}
+.inbox-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+</style>
+<script>
+let notifs=[
+  {id:1,unread:true,priority:'critical',icon:'corner-up-left',bg:'rgba(220,38,38,.1)',color:'var(--red)',
+   title:'เอกสารถูกส่งกลับแก้ไข',body:'SOP-ENG-022 Rev 1 ถูกส่งกลับโดย Safety Officer — ข้อมูล Spec ไม่ครบถ้วน',
+   time:'27 พ.ค. 68 16:05',link:'emp-03-tracking.html',actionLabel:'ดูความเห็นและแก้ไข'},
+  {id:2,unread:true,priority:'info',icon:'send',bg:'rgba(37,99,235,.1)',color:'var(--accent)',
+   title:'Workflow เริ่มต้นสำหรับ WI-ENG-015',body:'WI-ENG-015 Rev 2 เข้าสู่ขั้นตอน Safety review แล้ว รอการตรวจสอบ',
+   time:'23 พ.ค. 68 14:00',link:'emp-03-tracking.html',actionLabel:'ติดตามสถานะ'},
+  {id:3,unread:true,priority:'warning',icon:'clock',bg:'rgba(180,83,9,.1)',color:'var(--amber)',
+   title:'SOP-ENG-019 รออนุมัติ Eng. Lead',body:'SOP-ENG-019 Rev 3 ยังไม่ได้รับการตอบกลับจาก Eng. Lead มา 5 วันแล้ว',
+   time:'18 พ.ค. 68 10:00',link:'emp-03-tracking.html',actionLabel:'ดูสถานะ'},
+  {id:4,unread:false,priority:'success',icon:'circle-check',bg:'rgba(22,163,74,.1)',color:'var(--green)',
+   title:'WI-ENG-008 ได้รับการอนุมัติแล้ว!',body:'WI-ENG-008 Rev 4 ผ่านการอนุมัติครบทุกขั้นตอน สถานะเปลี่ยนเป็น Active แล้ว',
+   time:'10 พ.ค. 68 15:00',link:'emp-01-my-documents.html',actionLabel:'ดูเอกสาร'},
+  {id:5,unread:false,priority:'success',icon:'circle-check',bg:'rgba(22,163,74,.1)',color:'var(--green)',
+   title:'SOP-ENG-007B ได้รับการอนุมัติแล้ว',body:'SOP-ENG-007B Rev 1 อนุมัติโดยผู้จัดการ เอกสาร Active แล้ว',
+   time:'05 พ.ค. 68',link:'emp-01-my-documents.html',actionLabel:'ดูเอกสาร'},
+  {id:6,unread:false,priority:'info',icon:'calendar',bg:'rgba(37,99,235,.1)',color:'var(--accent)',
+   title:'แจ้งเตือน: PM schedule ใกล้ถึงกำหนด',body:'WI-ENG-008 ครบ review cycle 10 มิ.ย. 68 — เหลือ 32 วัน',
+   time:'08 พ.ค. 68',link:'emp-01-my-documents.html',actionLabel:'ดูเอกสาร'},
+];
+
+let activeTab='all';
+
+function switchTab(t,btn){
+  activeTab=t;
+  document.querySelectorAll('.inbox-tab').forEach(x=>x.classList.remove('active'));
+  btn.classList.add('active');
+  renderNotifs();
+}
+
+function renderNotifs(){
+  const data=activeTab==='unread'?notifs.filter(n=>n.unread):notifs;
+  const el=document.getElementById('notif-list');
+  document.getElementById('cnt-all').textContent=notifs.length;
+  document.getElementById('cnt-unread').textContent=notifs.filter(n=>n.unread).length;
+  document.getElementById('sb-badge').textContent=notifs.filter(n=>n.unread).length;
+  if(!data.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3)"><i data-lucide="bell-off" style="width:32px;height:32px;display:block;margin:0 auto 10px"></i>ไม่มีการแจ้งเตือน</div>';lucide.createIcons();return;}
+  el.innerHTML=data.map(n=>`
+    <div class="notif-item${n.unread?' unread':''}" onclick="readAndGo(${n.id},'${n.link}')">
+      ${n.unread?'<div class="unread-dot"></div>':'<div style="width:8px;flex-shrink:0"></div>'}
+      <div class="notif-icon" style="background:${n.bg};color:${n.color}"><i data-lucide="${n.icon}"></i></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">${n.title}</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:4px;line-height:1.4">${n.body}</div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:5px">${n.time}</div>
+        <div style="display:flex;gap:5px" onclick="event.stopPropagation()">
+          <button class="btn btn-primary btn-xs" onclick="readAndGo(${n.id},'${n.link}')">${n.actionLabel}</button>
+          ${n.unread?`<button class="btn btn-ghost btn-xs" onclick="markOne(${n.id})"><i data-lucide="check" style="width:11px;height:11px"></i> อ่านแล้ว</button>`:''}
+          <button class="btn btn-ghost btn-xs" onclick="deleteOne(${n.id})" style="color:var(--text3)"><i data-lucide="x" style="width:11px;height:11px"></i></button>
+        </div>
+      </div>
+    </div>`).join('');
+  lucide.createIcons();
+}
+
+function readAndGo(id,link){const n=notifs.find(x=>x.id===id);if(n)n.unread=false;renderNotifs();location.href=link;}
+function markOne(id){const n=notifs.find(x=>x.id===id);if(n)n.unread=false;renderNotifs();}
+function deleteOne(id){notifs=notifs.filter(x=>x.id!==id);renderNotifs();}
+function markAllRead(){notifs.forEach(n=>n.unread=false);renderNotifs();showToast('อ่านทั้งหมดแล้ว','success');}
+
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('collapsed');}
+function showToast(msg,type='info'){
+  const wrap=document.getElementById('toast-wrap'),t=document.createElement('div');t.className='toast '+type;
+  const ic={success:'circle-check',error:'alert-circle',info:'info'};
+  const co={success:'var(--green)',error:'var(--red)',info:'var(--accent)'};
+  t.innerHTML=`<i data-lucide="${ic[type]}" style="width:16px;height:16px;color:${co[type]};flex-shrink:0"></i><span>${msg}</span>`;
+  wrap.appendChild(t);lucide.createIcons();
+  setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(20px)';t.style.transition='.2s';setTimeout(()=>t.remove(),200);},3500);
+}
+document.addEventListener('DOMContentLoaded',()=>{renderNotifs();lucide.createIcons();});
+
+// ── Role-aware init ──
+document.addEventListener('DOMContentLoaded', () => {
+  buildSidebar('emp-04-notification');
+  DMS_applyRoleUI();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+});
+</script>
+</body>
+</html>

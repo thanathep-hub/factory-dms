@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Factory DMS — เข้าสู่ระบบ</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="session.js"></script>
+<style>
+:root{--bg:#f0f2f7;--bg2:#fff;--bg3:#f5f6fa;--bg4:#e8eaf2;--border:rgba(0,0,0,0.08);--border2:rgba(0,0,0,0.13);--text:#1a1d2e;--text2:#4b5068;--text3:#9096b2;--accent:#2563eb;--accent-dim:rgba(37,99,235,0.08);--accent-border:rgba(37,99,235,0.25);--red:#dc2626;--green:#16a34a;--amber:#b45309;--purple:#7c3aed;--radius:10px;--radius-lg:14px;--font:'Sarabun',sans-serif;--shadow:0 1px 3px rgba(0,0,0,0.08);--shadow-md:0 4px 16px rgba(0,0,0,0.1)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);font-family:var(--font);font-size:14px;color:var(--text);line-height:1.6}
+.page{min-height:100vh;display:flex;align-items:stretch}
+.left-panel{width:460px;background:var(--accent);display:flex;flex-direction:column;justify-content:space-between;padding:48px 44px;position:relative;overflow:hidden;flex-shrink:0}
+.left-panel::before{content:'';position:absolute;width:360px;height:360px;border-radius:50%;background:rgba(255,255,255,.06);top:-80px;right:-80px}
+.left-panel::after{content:'';position:absolute;width:240px;height:240px;border-radius:50%;background:rgba(255,255,255,.05);bottom:60px;left:-60px}
+.brand{position:relative;z-index:1}
+.brand-mark{width:44px;height:44px;background:rgba(255,255,255,.2);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;margin-bottom:20px;border:1px solid rgba(255,255,255,.25)}
+.brand-name{font-size:26px;font-weight:700;color:#fff;margin-bottom:6px}
+.brand-sub{font-size:14px;color:rgba(255,255,255,.7)}
+.features{position:relative;z-index:1}
+.feature-item{display:flex;align-items:flex-start;gap:12px;margin-bottom:18px}
+.feature-icon{width:34px;height:34px;background:rgba(255,255,255,.15);border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+.feature-title{font-size:13px;font-weight:600;color:#fff;margin-bottom:2px}
+.feature-desc{font-size:11px;color:rgba(255,255,255,.65)}
+.footer-note{position:relative;z-index:1;font-size:11px;color:rgba(255,255,255,.4)}
+.right-panel{flex:1;display:flex;align-items:center;justify-content:center;padding:40px;overflow-y:auto}
+.login-card{width:100%;max-width:420px}
+.login-title{font-size:22px;font-weight:700;margin-bottom:4px}
+.login-sub{font-size:13px;color:var(--text3);margin-bottom:24px}
+.form-group{margin-bottom:14px}
+.form-label{font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px}
+.form-input{width:100%;background:var(--bg3);border:1.5px solid var(--border2);border-radius:var(--radius);padding:10px 14px;color:var(--text);font-family:var(--font);font-size:14px;outline:none;transition:all .15s}
+.form-input:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px var(--accent-dim)}
+.input-wrap{position:relative}
+.input-wrap input{padding-left:40px}
+.input-icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--text3);pointer-events:none}
+.input-icon.right{left:auto;right:13px;cursor:pointer;pointer-events:all}
+.input-icon.right:hover{color:var(--text2)}
+/* Role cards */
+.role-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+.role-card{border:1.5px solid var(--border2);border-radius:10px;padding:12px 14px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden}
+.role-card:hover{border-color:var(--accent);background:var(--accent-dim)}
+.role-card.selected{border-color:var(--accent);background:var(--accent-dim)}
+.role-card.selected::after{content:'✓';position:absolute;top:6px;right:8px;font-size:12px;font-weight:700;color:var(--accent)}
+.role-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-bottom:8px}
+.role-name{font-size:12px;font-weight:700;color:var(--text);margin-bottom:2px}
+.role-desc{font-size:10px;color:var(--text3);line-height:1.4}
+/* Demo accounts */
+.demo-accounts{margin-bottom:16px}
+.demo-title{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:7px}
+.demo-row{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg3);border-radius:8px;border:1px solid var(--border);cursor:pointer;transition:all .15s;margin-bottom:5px}
+.demo-row:hover{border-color:var(--accent);background:var(--accent-dim)}
+.demo-avatar{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0}
+.demo-name{font-size:12px;font-weight:600;flex:1}
+.demo-role{font-size:10px;padding:2px 7px;border-radius:99px;font-weight:600}
+/* Remember row */
+.remember-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.check-label{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2);cursor:pointer}
+.check-label input{accent-color:var(--accent);cursor:pointer}
+.forgot{font-size:12px;color:var(--accent);cursor:pointer;font-weight:500}
+.forgot:hover{text-decoration:underline}
+.btn-login{width:100%;padding:12px;border-radius:var(--radius);background:var(--accent);color:#fff;font-family:var(--font);font-size:15px;font-weight:600;border:none;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 2px 6px rgba(37,99,235,.3)}
+.btn-login:hover{background:#1d4ed8;transform:translateY(-1px)}
+.divider-or{display:flex;align-items:center;gap:12px;margin:16px 0;color:var(--text3);font-size:12px}
+.divider-or::before,.divider-or::after{content:'';flex:1;height:1px;background:var(--border2)}
+.sso-btn{width:100%;padding:10px;border-radius:var(--radius);border:1.5px solid var(--border2);background:#fff;color:var(--text2);font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .15s}
+.sso-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+.error-msg{display:none;background:#fef2f2;border:1px solid rgba(220,38,38,.2);border-radius:var(--radius);padding:10px 14px;font-size:12px;color:var(--red);margin-bottom:12px;align-items:center;gap:8px}
+.error-msg.show{display:flex}
+.loading-overlay{display:none;position:fixed;inset:0;background:rgba(255,255,255,.85);backdrop-filter:blur(3px);z-index:200;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+.loading-overlay.show{display:flex}
+.spinner{width:36px;height:36px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="page">
+  <!-- LEFT -->
+  <div class="left-panel">
+    <div class="brand">
+      <div class="brand-mark">DM</div>
+      <div class="brand-name">FactoryDMS</div>
+      <div class="brand-sub">ระบบจัดการเอกสารโรงงาน · v2.0</div>
+    </div>
+    <div class="features">
+      <div class="feature-item">
+        <div class="feature-icon"><i data-lucide="files" style="width:16px;height:16px"></i></div>
+        <div><div class="feature-title">จัดเก็บเอกสารครบวงจร</div><div class="feature-desc">SOP, WI, FM พร้อม version control ทุก revision</div></div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon"><i data-lucide="check-check" style="width:16px;height:16px"></i></div>
+        <div><div class="feature-title">Approval Workflow อัตโนมัติ</div><div class="feature-desc">Multi-level approval พร้อมแจ้งเตือนทุก channel</div></div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon"><i data-lucide="clipboard-list" style="width:16px;height:16px"></i></div>
+        <div><div class="feature-title">Audit Log ตรวจสอบได้ทุกขั้นตอน</div><div class="feature-desc">บันทึกทุก action แบบ tamper-proof ตาม GMP</div></div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon"><i data-lucide="shield-check" style="width:16px;height:16px"></i></div>
+        <div><div class="feature-title">มาตรฐาน GMP / ISO 9001</div><div class="feature-desc">ออกแบบให้สอดคล้อง requirement ของโรงงาน</div></div>
+      </div>
+    </div>
+    <div class="footer-note">© 2568 FactoryDMS · โรงงาน ก จำกัด</div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="right-panel">
+    <div class="login-card">
+      <div class="login-title">เข้าสู่ระบบ</div>
+      <div class="login-sub">เลือก Demo Account หรือกรอกข้อมูลเพื่อทดสอบ</div>
+
+      <!-- Demo accounts quick-select -->
+      <div class="demo-accounts">
+        <div class="demo-title">Demo Accounts — คลิกเพื่อเลือก</div>
+        <div class="demo-row" onclick="fillDemo('EMP-0078','operator','อนุชา ทองดี')">
+          <div class="demo-avatar" style="background:#16a34a">AT</div>
+          <div class="demo-name">อนุชา ทองดี</div>
+          <span class="demo-role" style="background:rgba(22,163,74,.1);color:#16a34a">พนักงานทั่วไป</span>
+        </div>
+        <div class="demo-row" onclick="fillDemo('EMP-0042','manager','สมชาย กิตติ')">
+          <div class="demo-avatar" style="background:#2563eb">SK</div>
+          <div class="demo-name">สมชาย กิตติ</div>
+          <span class="demo-role" style="background:rgba(37,99,235,.1);color:#2563eb">ผู้จัดการ Production</span>
+        </div>
+        <div class="demo-row" onclick="fillDemo('EMP-0055','qa','นภา พงษ์สวัสดิ์')">
+          <div class="demo-avatar" style="background:#7c3aed">NP</div>
+          <div class="demo-name">นภา พงษ์สวัสดิ์</div>
+          <span class="demo-role" style="background:rgba(124,58,237,.1);color:#7c3aed">QA Manager</span>
+        </div>
+        <div class="demo-row" onclick="fillDemo('DIR-001','director','วิชัย ศิริพงษ์')">
+          <div class="demo-avatar" style="background:#b45309">DI</div>
+          <div class="demo-name">วิชัย ศิริพงษ์</div>
+          <span class="demo-role" style="background:rgba(180,83,9,.1);color:#b45309">ผู้อำนวยการ</span>
+        </div>
+        <div class="demo-row" onclick="fillDemo('ADMIN-001','admin','Admin System')">
+          <div class="demo-avatar" style="background:#dc2626">AD</div>
+          <div class="demo-name">Admin System</div>
+          <span class="demo-role" style="background:rgba(220,38,38,.1);color:#dc2626">System Admin</span>
+        </div>
+      </div>
+
+      <!-- Error -->
+      <div class="error-msg" id="error-msg"><i data-lucide="alert-circle" style="width:14px;height:14px;flex-shrink:0"></i><span id="error-text">รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง</span></div>
+
+      <!-- Fields -->
+      <div class="form-group">
+        <label class="form-label">รหัสพนักงาน (Employee ID)</label>
+        <div class="input-wrap">
+          <i data-lucide="contact" class="input-icon" style="width:16px;height:16px"></i>
+          <input class="form-input" id="username" type="text" placeholder="เช่น EMP-0042" value="EMP-0042" autocomplete="username">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">รหัสผ่าน</label>
+        <div class="input-wrap">
+          <i data-lucide="lock" class="input-icon" style="width:16px;height:16px"></i>
+          <input class="form-input" id="password" type="password" placeholder="รหัสผ่าน" value="••••••••" autocomplete="current-password">
+          <i data-lucide="eye" class="input-icon right" id="eye-icon" onclick="toggleEye()" style="width:16px;height:16px"></i>
+        </div>
+      </div>
+
+      <div class="remember-row">
+        <label class="check-label"><input type="checkbox" checked> จดจำการเข้าสู่ระบบ</label>
+        <span class="forgot" onclick="forgotPw()">ลืมรหัสผ่าน?</span>
+      </div>
+
+      <button class="btn-login" id="login-btn" onclick="doLogin()">
+        <i data-lucide="log-in" style="width:16px;height:16px"></i> เข้าสู่ระบบ
+      </button>
+
+      <div class="divider-or">หรือ</div>
+      <button class="sso-btn" onclick="doSSO()">
+        <i data-lucide="factory" style="width:16px;height:16px"></i>
+        เข้าสู่ระบบผ่าน Active Directory (SSO)
+      </button>
+
+      <div style="text-align:center;font-size:11px;color:var(--text3);margin-top:20px">
+        ติดต่อ IT Support: ext. 1234 · it-support@factory-a.co.th
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="loading-overlay" id="loading">
+  <div class="spinner"></div>
+  <div style="font-size:13px;color:#4b5068;font-family:'Sarabun',sans-serif" id="loading-text">กำลังตรวจสอบข้อมูล...</div>
+</div>
+
+<script>
+let selectedRole = 'manager';
+
+function fillDemo(id, role, name) {
+  document.getElementById('username').value = id;
+  document.getElementById('password').value = 'demo1234';
+  selectedRole = role;
+  document.querySelectorAll('.demo-row').forEach(r => r.style.borderColor='');
+  event.currentTarget.style.borderColor = 'var(--accent)';
+}
+
+function toggleEye(){
+  const inp=document.getElementById('password');
+  const icon=document.getElementById('eye-icon');
+  if(inp.type==='password'){inp.type='text';icon.setAttribute('data-lucide','eye-off');}
+  else{inp.type='password';icon.setAttribute('data-lucide','eye');}
+  lucide.createIcons();
+}
+
+function forgotPw(){
+  document.getElementById('error-text').textContent='ส่ง link รีเซ็ตรหัสผ่านไปที่ email ของคุณแล้ว';
+  const em=document.getElementById('error-msg');
+  em.style.cssText='display:flex;background:#f0fdf4;border-color:rgba(22,163,74,.2);color:#16a34a';
+  em.classList.add('show');
+  setTimeout(()=>em.classList.remove('show'),3000);
+}
+
+function doSSO(){
+  document.getElementById('loading-text').textContent='กำลังเชื่อมต่อ Active Directory...';
+  document.getElementById('loading').classList.add('show');
+  setTimeout(()=>{ document.getElementById('loading').classList.remove('show'); goToApp(); },1800);
+}
+
+function doLogin(){
+  const user=document.getElementById('username').value.trim();
+  const pass=document.getElementById('password').value;
+  const errEl=document.getElementById('error-msg');
+  errEl.classList.remove('show');
+  if(!user){ showErr('กรุณากรอกรหัสพนักงาน'); return; }
+  if(!pass){ showErr('กรุณากรอกรหัสผ่าน'); return; }
+  if(user==='wrong'||pass==='wrong'){ showErr('รหัสพนักงานหรือรหัสผ่านไม่ถูกต้อง'); return; }
+  document.getElementById('loading-text').textContent='กำลังตรวจสอบข้อมูล...';
+  document.getElementById('loading').classList.add('show');
+  setTimeout(()=>{ document.getElementById('loading').classList.remove('show'); goToApp(); },1400);
+}
+
+function showErr(msg){
+  document.getElementById('error-text').textContent=msg;
+  const em=document.getElementById('error-msg');
+  em.style.cssText='';em.classList.add('show');
+}
+
+function goToApp(){
+  DMS_setSession(selectedRole);
+  const perms = ROLE_PERMISSIONS[selectedRole];
+  window.location.href = perms.home;
+}
+
+document.getElementById('password').addEventListener('keypress',e=>{if(e.key==='Enter')doLogin();});
+document.addEventListener('DOMContentLoaded',()=>lucide.createIcons());
+</script>
+</body>
+</html>

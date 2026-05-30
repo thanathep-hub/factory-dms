@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Factory DMS — Audit Log</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="session.js"></script>
+<script src="sidebar.js"></script>
+<link rel="stylesheet" href="shared.css">
+<style>
+/* ── Stats ── */
+.audit-stats { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px; }
+
+/* ── Filter bar ── */
+.filter-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; align-items:center; }
+.date-range { display:flex; align-items:center; gap:6px; }
+.date-range input[type=date] {
+  background:var(--bg2); border:1px solid var(--border2); border-radius:var(--radius);
+  padding:7px 10px; color:var(--text); font-family:var(--mono); font-size:11px; outline:none; cursor:pointer;
+}
+.date-range input[type=date]:focus { border-color:var(--accent); }
+
+/* ── Table ── */
+.audit-table { width:100%; border-collapse:collapse; }
+.audit-table th {
+  background:var(--bg3); font-size:10px; color:var(--text3); font-weight:700;
+  text-transform:uppercase; letter-spacing:.07em; padding:9px 12px;
+  text-align:left; border-bottom:1px solid var(--border); white-space:nowrap; cursor:pointer;
+  user-select:none; position:sticky; top:0; z-index:1;
+}
+.audit-table th:hover { color:var(--text2); }
+.audit-table th .sort-icon { opacity:.4; margin-left:3px; vertical-align:middle; }
+.audit-table th.sorted .sort-icon { opacity:1; color:var(--accent); }
+.audit-table td { padding:10px 12px; border-bottom:1px solid var(--border); font-size:12px; vertical-align:middle; }
+.audit-table tr:last-child td { border-bottom:none; }
+.audit-table tr:hover td { background:var(--bg3); }
+.audit-table tr.highlight td { background:var(--accent-dim); }
+
+/* ── Action badges ── */
+.action-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; border-radius:5px; font-size:10px; font-weight:700; white-space:nowrap; font-family:var(--mono); }
+.act-APPROVED    { background:rgba(22,163,74,.1);   color:#16a34a; border:1px solid rgba(22,163,74,.2);   }
+.act-SUBMITTED   { background:rgba(37,99,235,.1);   color:#2563eb; border:1px solid rgba(37,99,235,.2);   }
+.act-UPLOADED    { background:rgba(37,99,235,.1);   color:#2563eb; border:1px solid rgba(37,99,235,.2);   }
+.act-REJECTED    { background:rgba(180,83,9,.1);    color:#b45309; border:1px solid rgba(180,83,9,.2);    }
+.act-VIEWED      { background:rgba(144,150,178,.1); color:#6b7280; border:1px solid rgba(144,150,178,.2); }
+.act-DOWNLOADED  { background:rgba(124,58,237,.1);  color:#7c3aed; border:1px solid rgba(124,58,237,.2);  }
+.act-RESTORED    { background:rgba(220,38,38,.1);   color:#dc2626; border:1px solid rgba(220,38,38,.2);   }
+.act-DELETED     { background:rgba(220,38,38,.1);   color:#dc2626; border:1px solid rgba(220,38,38,.2);   }
+.act-OBSOLETED   { background:rgba(144,150,178,.1); color:#6b7280; border:1px solid rgba(144,150,178,.2); }
+.act-CREATED     { background:rgba(22,163,74,.1);   color:#16a34a; border:1px solid rgba(22,163,74,.2);   }
+.act-EDITED      { background:rgba(180,83,9,.1);    color:#b45309; border:1px solid rgba(180,83,9,.2);    }
+.act-EXPORTED    { background:rgba(124,58,237,.1);  color:#7c3aed; border:1px solid rgba(124,58,237,.2);  }
+.act-LOGIN       { background:rgba(37,99,235,.1);   color:#2563eb; border:1px solid rgba(37,99,235,.2);   }
+
+/* ── Hash / IP mono cells ── */
+.mono-cell { font-family:var(--mono); font-size:10px; color:var(--text3); }
+.hash-full { display:none; }
+.hash-short { cursor:pointer; text-decoration:underline; text-decoration-style:dotted; }
+.hash-short:hover { color:var(--accent); }
+
+/* ── Integrity indicator ── */
+.integrity-ok  { display:inline-flex; align-items:center; gap:4px; font-size:10px; color:var(--green); font-weight:600; }
+.integrity-err { display:inline-flex; align-items:center; gap:4px; font-size:10px; color:var(--red);   font-weight:600; }
+
+/* ── Tamper-proof banner ── */
+.tamper-banner {
+  display:flex; align-items:center; gap:10px; padding:10px 14px;
+  background:rgba(22,163,74,.06); border:1px solid rgba(22,163,74,.2);
+  border-radius:var(--radius); margin-bottom:14px; font-size:12px; color:var(--text2);
+}
+
+/* ── Detail modal ── */
+.detail-kv { display:flex; gap:0; border-bottom:1px solid var(--border); padding:8px 0; }
+.detail-kv:last-child { border-bottom:none; }
+.detail-key { font-size:11px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:.04em; width:140px; flex-shrink:0; padding-top:1px; }
+.detail-val { font-size:13px; color:var(--text); flex:1; word-break:break-all; }
+.hash-block {
+  font-family:var(--mono); font-size:11px; background:var(--bg3);
+  border:1px solid var(--border2); border-radius:6px; padding:8px 10px;
+  color:var(--text2); word-break:break-all; line-height:1.6; margin-top:4px;
+}
+
+/* ── Chain verification ── */
+.chain-row { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--border); font-size:12px; }
+.chain-row:last-child { border-bottom:none; }
+.chain-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+
+/* ── Pagination ── */
+.page-btn { min-width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px; border:1px solid var(--border2); background:var(--bg2); color:var(--text2); cursor:pointer; font-size:12px; font-family:var(--mono); transition:all .15s; }
+.page-btn:hover { border-color:var(--accent); color:var(--accent); }
+.page-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+.page-btn:disabled { opacity:.4; cursor:not-allowed; }
+
+/* ── Export dropdown ── */
+.export-menu { position:relative; display:inline-block; }
+.export-dropdown { display:none; position:absolute; right:0; top:calc(100% + 4px); background:var(--bg2); border:1px solid var(--border2); border-radius:var(--radius); box-shadow:var(--shadow-md); min-width:160px; z-index:50; overflow:hidden; }
+.export-menu.open .export-dropdown { display:block; }
+.export-opt { display:flex; align-items:center; gap:8px; padding:9px 14px; font-size:13px; cursor:pointer; color:var(--text2); transition:background .1s; }
+.export-opt:hover { background:var(--bg3); color:var(--text); }
+
+/* ── Live badge ── */
+.live-dot { width:7px; height:7px; border-radius:50%; background:var(--green); animation:pulse 2s infinite; display:inline-block; margin-right:4px; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="btn btn-ghost btn-sm" onclick="toggleSidebar()" style="padding:5px 8px"><i data-lucide="menu"></i></button>
+      <span id="topbar-role" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;margin-right:4px"></span><div class="page-title">Audit Log <span class="page-sub">บันทึกทุก action ในระบบ</span></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="font-size:11px;color:var(--text3);display:flex;align-items:center"><span class="live-dot"></span>Live</span>
+        <div class="divider"></div>
+        <div class="export-menu" id="export-menu">
+          <button class="btn btn-ghost btn-sm" onclick="toggleExportMenu()"><i data-lucide="download"></i> Export <i data-lucide="chevron-down" style="width:12px;height:12px"></i></button>
+          <div class="export-dropdown">
+            <div class="export-opt" onclick="doExport('csv')"><i data-lucide="file-spreadsheet" style="width:15px;height:15px;color:var(--green)"></i> Export CSV</div>
+            <div class="export-opt" onclick="doExport('pdf')"><i data-lucide="file-text" style="width:15px;height:15px;color:var(--red)"></i> Export PDF Report</div>
+            <div class="export-opt" onclick="doExport('json')"><i data-lucide="braces" style="width:15px;height:15px;color:var(--accent)"></i> Export JSON (Raw)</div>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="location.href='02-approval.html'" style="position:relative">
+          <i data-lucide="bell"></i>
+          <span style="position:absolute;top:4px;right:4px;width:6px;height:6px;background:var(--red);border-radius:50%"></span>
+        </button>
+        <div class="divider"></div>
+        <div class="avatar" style="cursor:pointer" onclick="location.href='00-login.html'">SK</div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- KPI Stats -->
+      <div class="audit-stats">
+        <div class="stat-box"><div class="stat-label">Log ทั้งหมด</div><div class="stat-value" style="color:var(--text)" id="stat-total">—</div><div class="stat-sub">ตลอดอายุระบบ</div></div>
+        <div class="stat-box"><div class="stat-label">วันนี้</div><div class="stat-value" style="color:var(--accent)" id="stat-today">—</div><div class="stat-sub" id="stat-today-sub">—</div></div>
+        <div class="stat-box"><div class="stat-label">Approve</div><div class="stat-value" style="color:var(--green)" id="stat-approve">—</div><div class="stat-sub">เดือนนี้</div></div>
+        <div class="stat-box"><div class="stat-label">Reject</div><div class="stat-value" style="color:var(--amber)" id="stat-reject">—</div><div class="stat-sub">เดือนนี้</div></div>
+        <div class="stat-box">
+          <div class="stat-label">Chain Integrity</div>
+          <div class="stat-value" style="color:var(--green);font-size:16px;margin-top:4px">✓ ผ่าน</div>
+          <div class="stat-sub" style="color:var(--green)">ตรวจล่าสุด 10:42</div>
+        </div>
+      </div>
+
+      <!-- Tamper-proof banner -->
+      <div class="tamper-banner">
+        <i data-lucide="shield-check" style="width:18px;height:18px;color:var(--green);flex-shrink:0"></i>
+        <div>
+          <span style="font-weight:700;color:var(--green)">Tamper-Proof Log</span>
+          — ทุก record ถูกลงนามด้วย SHA-256 hash chain ที่ต่อเนื่องกัน การแก้ไข record ใดก็ตามจะทำให้ hash chain ขาดและตรวจพบได้ทันที
+        </div>
+        <button class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="openModal('modal-verify')"><i data-lucide="scan-line"></i> ตรวจสอบ Chain</button>
+      </div>
+
+      <!-- Filters -->
+      <div class="filter-row">
+        <div class="search-box" style="width:240px;flex:none">
+          <i data-lucide="search" style="width:13px;height:13px;color:var(--text3)"></i>
+          <input type="text" id="f-search" placeholder="ค้นหา รหัสเอกสาร / ผู้ใช้..." oninput="applyFilters()">
+        </div>
+        <select class="filter-select" id="f-action" onchange="applyFilters()">
+          <option value="">ทุก Action</option>
+          <option>APPROVED</option><option>SUBMITTED</option><option>UPLOADED</option>
+          <option>REJECTED</option><option>VIEWED</option><option>DOWNLOADED</option>
+          <option>RESTORED</option><option>DELETED</option><option>OBSOLETED</option>
+          <option>CREATED</option><option>EDITED</option><option>EXPORTED</option><option>LOGIN</option>
+        </select>
+        <select class="filter-select" id="f-user" onchange="applyFilters()">
+          <option value="">ทุกผู้ใช้</option>
+          <option>สมชาย K.</option><option>นภา P.</option><option>วิภา S.</option>
+          <option>อนุชา T.</option><option>พิมพ์ W.</option><option>ผู้อำนวยการ</option>
+        </select>
+        <select class="filter-select" id="f-doc" onchange="applyFilters()">
+          <option value="">ทุกเอกสาร</option>
+          <option>SOP-PRD-001</option><option>WI-QC-015</option><option>FM-QA-021</option>
+          <option>WI-PRD-042</option><option>SOP-ENG-022</option><option>SOP-QC-008</option>
+        </select>
+        <div class="date-range">
+          <i data-lucide="calendar" style="width:13px;height:13px;color:var(--text3)"></i>
+          <input type="date" id="f-date-from" value="2025-05-01" onchange="applyFilters()">
+          <span style="font-size:12px;color:var(--text3)">—</span>
+          <input type="date" id="f-date-to" value="2025-05-28" onchange="applyFilters()">
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="clearFilters()"><i data-lucide="x"></i> ล้าง</button>
+      </div>
+
+      <!-- Active filter chips -->
+      <div id="active-chips" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px;min-height:24px"></div>
+
+      <!-- Table card -->
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+          <i data-lucide="list" style="width:14px;height:14px;color:var(--accent)"></i>
+          <span style="font-size:13px;font-weight:700">รายการ Audit Log</span>
+          <span style="font-size:11px;color:var(--text3)" id="result-count">—</span>
+          <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+            <label style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px;cursor:pointer">
+              <input type="checkbox" id="highlight-sensitive" onchange="applyFilters()" style="accent-color:var(--red)">
+              Highlight sensitive
+            </label>
+          </div>
+        </div>
+        <div class="table-wrap" style="max-height:520px;overflow-y:auto">
+          <table class="audit-table">
+            <thead>
+              <tr>
+                <th style="width:36px"><input type="checkbox" id="check-all" onchange="toggleAll(this)" style="cursor:pointer"></th>
+                <th onclick="sortBy('seq')">#<i data-lucide="chevrons-up-down" class="sort-icon" style="width:10px;height:10px"></i></th>
+                <th onclick="sortBy('ts')" class="sorted">Timestamp<i data-lucide="chevrons-up-down" class="sort-icon" style="width:10px;height:10px"></i></th>
+                <th onclick="sortBy('action')">Action<i data-lucide="chevrons-up-down" class="sort-icon" style="width:10px;height:10px"></i></th>
+                <th onclick="sortBy('doc')">เอกสาร<i data-lucide="chevrons-up-down" class="sort-icon" style="width:10px;height:10px"></i></th>
+                <th onclick="sortBy('user')">ผู้ใช้<i data-lucide="chevrons-up-down" class="sort-icon" style="width:10px;height:10px"></i></th>
+                <th>IP Address</th>
+                <th>SHA-256 Hash</th>
+                <th>Chain</th>
+                <th style="width:60px"></th>
+              </tr>
+            </thead>
+            <tbody id="log-tbody"></tbody>
+          </table>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-top:1px solid var(--border)">
+          <span style="font-size:12px;color:var(--text3)" id="page-info">—</span>
+          <div style="display:flex;gap:4px" id="pagination"></div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </main>
+</div>
+
+<!-- LOG DETAIL MODAL -->
+<div class="modal-overlay" id="modal-detail">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-header">
+      <div class="modal-title"><i data-lucide="file-search" style="color:var(--accent)"></i> รายละเอียด Log Entry</div>
+      <button class="modal-close" onclick="closeModal('modal-detail')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <!-- Action header -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:12px 14px;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border)">
+        <div id="modal-action-icon" style="width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0"></div>
+        <div>
+          <div style="font-size:14px;font-weight:700" id="modal-action-label">—</div>
+          <div style="font-size:11px;color:var(--text3)" id="modal-action-sub">—</div>
+        </div>
+        <div style="margin-left:auto" id="modal-integrity-badge"></div>
+      </div>
+      <!-- KV pairs -->
+      <div id="modal-kv"></div>
+      <!-- Hash section -->
+      <div style="margin-top:14px">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Cryptographic Signature</div>
+        <div class="hash-block" id="modal-hash-block"></div>
+      </div>
+      <!-- Metadata -->
+      <div style="margin-top:12px;padding:10px 12px;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border);font-size:11px;color:var(--text3);display:flex;gap:16px;flex-wrap:wrap">
+        <span><i data-lucide="server" style="width:11px;height:11px;vertical-align:middle"></i> Server: <code style="font-family:var(--mono)">dms-prod-01</code></span>
+        <span><i data-lucide="database" style="width:11px;height:11px;vertical-align:middle"></i> DB: <code style="font-family:var(--mono)">audit_log</code></span>
+        <span><i data-lucide="lock" style="width:11px;height:11px;vertical-align:middle"></i> Signed: RSA-2048</span>
+        <span><i data-lucide="globe" style="width:11px;height:11px;vertical-align:middle"></i> TZ: Asia/Bangkok</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-detail')">ปิด</button>
+      <button class="btn btn-ghost" onclick="showToast('Copy hash สำเร็จ','success')"><i data-lucide="copy"></i> Copy Hash</button>
+      <button class="btn btn-ghost" onclick="doExport('pdf')"><i data-lucide="download"></i> Export Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHAIN VERIFY MODAL -->
+<div class="modal-overlay" id="modal-verify">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title"><i data-lucide="scan-line" style="color:var(--green)"></i> ตรวจสอบ Hash Chain Integrity</div>
+      <button class="modal-close" onclick="closeModal('modal-verify')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:rgba(22,163,74,.06);border:1px solid rgba(22,163,74,.2);border-radius:var(--radius);margin-bottom:16px">
+        <i data-lucide="shield-check" style="width:22px;height:22px;color:var(--green);flex-shrink:0"></i>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--green)">Chain สมบูรณ์ — ไม่พบการแก้ไข</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">ตรวจสอบ 248 records · ใช้เวลา 0.34 วินาที · 28 พ.ค. 68 10:42:17</div>
+        </div>
+      </div>
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">รายการตรวจสอบล่าสุด (10 records)</div>
+      <div id="chain-list"></div>
+      <div style="margin-top:14px;padding:10px 12px;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border);font-size:11px;color:var(--text3)">
+        <div style="font-weight:700;margin-bottom:4px">Genesis Block Hash:</div>
+        <div style="font-family:var(--mono);word-break:break-all;line-height:1.6;color:var(--text2)">0000000000000000 · 4a7f3b2c1e9d8f6a · e5c4b3a291807f6e · 5d4c3b2a19087f6e</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-verify')">ปิด</button>
+      <button class="btn btn-primary" onclick="showToast('Export Verification Report เรียบร้อย','success')"><i data-lucide="download"></i> Export Verification Report</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   DATA — 40 realistic audit log entries
+═══════════════════════════════════════════════════════════ */
+const ACTIONS_META = {
+  APPROVED:   { icon:'circle-check', bg:'rgba(22,163,74,.1)',   color:'#16a34a', sensitive:false },
+  SUBMITTED:  { icon:'send',         bg:'rgba(37,99,235,.1)',   color:'#2563eb', sensitive:false },
+  UPLOADED:   { icon:'upload',       bg:'rgba(37,99,235,.1)',   color:'#2563eb', sensitive:false },
+  REJECTED:   { icon:'corner-up-left',bg:'rgba(180,83,9,.1)',  color:'#b45309', sensitive:false },
+  VIEWED:     { icon:'eye',          bg:'rgba(144,150,178,.1)', color:'#6b7280', sensitive:false },
+  DOWNLOADED: { icon:'download',     bg:'rgba(124,58,237,.1)',  color:'#7c3aed', sensitive:true  },
+  RESTORED:   { icon:'rotate-ccw',   bg:'rgba(220,38,38,.1)',   color:'#dc2626', sensitive:true  },
+  DELETED:    { icon:'trash-2',      bg:'rgba(220,38,38,.1)',   color:'#dc2626', sensitive:true  },
+  OBSOLETED:  { icon:'ban',          bg:'rgba(144,150,178,.1)', color:'#6b7280', sensitive:false },
+  CREATED:    { icon:'file-plus',    bg:'rgba(22,163,74,.1)',   color:'#16a34a', sensitive:false },
+  EDITED:     { icon:'pencil',       bg:'rgba(180,83,9,.1)',    color:'#b45309', sensitive:false },
+  EXPORTED:   { icon:'package-export',bg:'rgba(124,58,237,.1)','color':'#7c3aed', sensitive:true },
+  LOGIN:      { icon:'log-in',       bg:'rgba(37,99,235,.1)',   color:'#2563eb', sensitive:false },
+};
+
+function fakeHash(seed){
+  let h=0;for(let i=0;i<seed.length;i++){h=((h<<5)-h)+seed.charCodeAt(i);h|=0;}
+  const hex=Math.abs(h).toString(16).padStart(8,'0');
+  const parts=[hex+hex,hex.split('').reverse().join('')+hex,'a3f9'+hex,'b8d2'+hex];
+  return parts.join('').substring(0,64);
+}
+function fakePrevHash(seq){
+  return seq===1?'0000000000000000000000000000000000000000000000000000000000000000':fakeHash('prev'+seq);
+}
+
+const rawLogs = [
+  {seq:248,ts:'2025-05-28 10:42:17',action:'APPROVED',doc:'WI-PRD-042',rev:'Rev 3',user:'วิภา S.',ip:'192.168.1.45',dept:'QA',detail:'Approved at step: ผจก. QA → Director',session:'sess_vS_28052025'},
+  {seq:247,ts:'2025-05-28 10:30:05',action:'VIEWED',doc:'WI-PRD-042',rev:'Rev 3',user:'วิภา S.',ip:'192.168.1.45',dept:'QA',detail:'Document preview opened',session:'sess_vS_28052025'},
+  {seq:246,ts:'2025-05-28 09:15:33',action:'UPLOADED',doc:'WI-PRD-042',rev:'Rev 3',user:'สมชาย K.',ip:'192.168.1.32',dept:'Production',detail:'File: WI-PRD-042_Rev3.pdf (2.4 MB)',session:'sess_sK_28052025'},
+  {seq:245,ts:'2025-05-28 09:10:02',action:'CREATED',doc:'WI-PRD-042',rev:'Rev 3',user:'สมชาย K.',ip:'192.168.1.32',dept:'Production',detail:'New revision created from Rev 2',session:'sess_sK_28052025'},
+  {seq:244,ts:'2025-05-28 08:58:14',action:'LOGIN',doc:'—',rev:'—',user:'สมชาย K.',ip:'192.168.1.32',dept:'Production',detail:'Login via Employee ID: EMP-0042',session:'sess_sK_28052025'},
+  {seq:243,ts:'2025-05-27 16:05:44',action:'REJECTED',doc:'SOP-QC-008',rev:'Rev 1',user:'นภา P.',ip:'192.168.1.55',dept:'QA',detail:'Reason: ข้อมูล Spec ไม่ครบถ้วน — กรุณาระบุ dissolution limit',session:'sess_nP_27052025'},
+  {seq:242,ts:'2025-05-27 15:30:21',action:'VIEWED',doc:'SOP-QC-008',rev:'Rev 1',user:'นภา P.',ip:'192.168.1.55',dept:'QA',detail:'Review before approval decision',session:'sess_nP_27052025'},
+  {seq:241,ts:'2025-05-27 14:22:58',action:'DOWNLOADED',doc:'SOP-PRD-001',rev:'Rev 5',user:'อนุชา T.',ip:'10.0.0.12',dept:'Engineering',detail:'Downloaded for offline review',session:'sess_aT_27052025'},
+  {seq:240,ts:'2025-05-27 13:45:10',action:'SUBMITTED',doc:'SOP-QC-008',rev:'Rev 1',user:'นภา P.',ip:'192.168.1.55',dept:'QA',detail:'Submitted via workflow: Standard (Author→QA→Manager→Director)',session:'sess_nP_27052025'},
+  {seq:239,ts:'2025-05-27 11:30:05',action:'VIEWED',doc:'FM-QA-021',rev:'Rev 8',user:'อนุชา T.',ip:'10.0.0.12',dept:'Engineering',detail:'Document preview — read only',session:'sess_aT_27052025'},
+  {seq:238,ts:'2025-05-27 10:02:33',action:'APPROVED',doc:'FM-QA-021',rev:'Rev 8',user:'ผู้อำนวยการ',ip:'172.16.0.5',dept:'Management',detail:'Final approval — document now Active',session:'sess_dir_27052025'},
+  {seq:237,ts:'2025-05-27 09:55:18',action:'APPROVED',doc:'FM-QA-021',rev:'Rev 8',user:'นภา P.',ip:'192.168.1.55',dept:'QA',detail:'Approved at step: ผจก. QA',session:'sess_nP_27052025'},
+  {seq:236,ts:'2025-05-26 16:00:42',action:'SUBMITTED',doc:'FM-QA-021',rev:'Rev 8',user:'วิภา S.',ip:'192.168.1.45',dept:'QA',detail:'Submitted via workflow: Standard',session:'sess_vS_26052025'},
+  {seq:235,ts:'2025-05-26 15:20:09',action:'APPROVED',doc:'FM-WH-003',rev:'Rev 4',user:'ผู้อำนวยการ',ip:'172.16.0.5',dept:'Management',detail:'Final approval',session:'sess_dir_26052025'},
+  {seq:234,ts:'2025-05-26 14:45:31',action:'EXPORTED',doc:'SOP-PRD-001',rev:'Rev 5',user:'สมชาย K.',ip:'192.168.1.32',dept:'Production',detail:'Exported to PDF — 12 pages',session:'sess_sK_26052025'},
+  {seq:233,ts:'2025-05-26 10:00:17',action:'SUBMITTED',doc:'FM-WH-003',rev:'Rev 4',user:'พิมพ์ W.',ip:'192.168.2.10',dept:'Warehouse',detail:'Submitted via workflow: Fast-track',session:'sess_pW_26052025'},
+  {seq:232,ts:'2025-05-25 13:45:22',action:'UPLOADED',doc:'SOP-QC-008',rev:'Rev 1',user:'นภา P.',ip:'192.168.1.55',dept:'QA',detail:'File: SOP-QC-008_Rev1.docx (1.1 MB)',session:'sess_nP_25052025'},
+  {seq:231,ts:'2025-05-25 09:00:44',action:'CREATED',doc:'SOP-QC-008',rev:'Rev 1',user:'นภา P.',ip:'192.168.1.55',dept:'QA',detail:'New document created',session:'sess_nP_25052025'},
+  {seq:230,ts:'2025-05-24 14:30:12',action:'UPLOADED',doc:'SOP-ENG-022',rev:'Rev 1',user:'อนุชา T.',ip:'10.0.0.12',dept:'Engineering',detail:'File: SOP-ENG-022_Rev1.pdf (3.2 MB)',session:'sess_aT_24052025'},
+  {seq:229,ts:'2025-05-24 14:28:01',action:'CREATED',doc:'SOP-ENG-022',rev:'Rev 1',user:'อนุชา T.',ip:'10.0.0.12',dept:'Engineering',detail:'New document created',session:'sess_aT_24052025'},
+  {seq:228,ts:'2025-05-23 11:15:37',action:'VIEWED',doc:'WI-PRD-031',rev:'Rev 6',user:'สมชาย K.',ip:'192.168.1.32',dept:'Production',detail:'Training reference review',session:'sess_sK_23052025'},
+  {seq:227,ts:'2025-05-22 15:20:55',action:'APPROVED',doc:'FM-WH-003',rev:'Rev 4',user:'พิมพ์ W.',ip:'192.168.2.10',dept:'Warehouse',detail:'Self-review completed',session:'sess_pW_22052025'},
+  {seq:226,ts:'2025-05-22 09:10:28',action:'EDITED',doc:'FM-WH-003',rev:'Rev 4 (Draft)',user:'พิมพ์ W.',ip:'192.168.2.10',dept:'Warehouse',detail:'Added column: Certificate of Analysis',session:'sess_pW_22052025'},
+  {seq:225,ts:'2025-05-21 16:40:19',action:'DOWNLOADED',doc:'WI-QC-015',rev:'Rev 1',user:'นภา P.',ip:'192.168.1.55',dept:'QA',detail:'Downloaded for revision preparation',session:'sess_nP_21052025'},
+  {seq:224,ts:'2025-05-20 11:00:03',action:'OBSOLETED',doc:'SOP-ENG-007',rev:'Rev 1',user:'ผู้อำนวยการ',ip:'172.16.0.5',dept:'Management',detail:'Superseded by SOP-ENG-007B',session:'sess_dir_20052025'},
+  {seq:223,ts:'2025-05-19 14:22:11',action:'VIEWED',doc:'SOP-PRD-001',rev:'Rev 5',user:'นภา P.',ip:'192.168.1.55',dept:'QA',detail:'Periodic review check',session:'sess_nP_19052025'},
+  {seq:222,ts:'2025-05-18 09:00:45',action:'APPROVED',doc:'WI-PRD-031',rev:'Rev 6',user:'ผู้อำนวยการ',ip:'172.16.0.5',dept:'Management',detail:'Final approval — document Active',session:'sess_dir_18052025'},
+  {seq:221,ts:'2025-05-17 15:33:22',action:'SUBMITTED',doc:'WI-PRD-031',rev:'Rev 6',user:'สมชาย K.',ip:'192.168.1.32',dept:'Production',detail:'Submitted via Standard workflow',session:'sess_sK_17052025'},
+  {seq:220,ts:'2025-05-16 10:12:59',action:'UPLOADED',doc:'WI-PRD-031',rev:'Rev 6',user:'สมชาย K.',ip:'192.168.1.32',dept:'Production',detail:'File: WI-PRD-031_Rev6.pdf (1.8 MB)',session:'sess_sK_16052025'},
+  {seq:219,ts:'2025-05-15 11:30:14',action:'APPROVED',doc:'SOP-PRD-012',rev:'Rev 3',user:'วิภา S.',ip:'192.168.1.45',dept:'QA',detail:'Final approval',session:'sess_vS_15052025'},
+  {seq:218,ts:'2025-05-14 14:05:38',action:'SUBMITTED',doc:'SOP-PRD-012',rev:'Rev 3',user:'สมชาย K.',ip:'192.168.1.32',dept:'Production',detail:'Submitted via workflow: Standard',session:'sess_sK_14052025'},
+  {seq:217,ts:'2025-05-13 09:22:47',action:'RESTORED',doc:'SOP-PRD-001',rev:'Rev 3 → New Rev',user:'สมชาย K.',ip:'192.168.1.32',dept:'Production',detail:'Restored from Rev 3 — reason: Rev 4 spec found incorrect',session:'sess_sK_13052025'},
+  {seq:216,ts:'2025-05-12 16:55:03',action:'VIEWED',doc:'SOP-ENG-007',rev:'Rev 1',user:'อนุชา T.',ip:'10.0.0.12',dept:'Engineering',detail:'Pre-obsolete review',session:'sess_aT_12052025'},
+  {seq:215,ts:'2025-05-11 10:08:29',action:'DOWNLOADED',doc:'FM-QA-021',rev:'Rev 7',user:'วิภา S.',ip:'192.168.1.45',dept:'QA',detail:'Archived copy for records',session:'sess_vS_11052025'},
+  {seq:214,ts:'2025-05-10 13:41:52',action:'EDITED',doc:'FM-QA-021',rev:'Rev 8 (Draft)',user:'วิภา S.',ip:'192.168.1.45',dept:'QA',detail:'Added pH and Viscosity columns',session:'sess_vS_10052025'},
+  {seq:213,ts:'2025-05-09 09:15:20',action:'LOGIN',doc:'—',rev:'—',user:'วิภา S.',ip:'192.168.1.45',dept:'QA',detail:'Login via SSO Active Directory',session:'sess_vS_09052025'},
+  {seq:212,ts:'2025-05-08 14:30:07',action:'VIEWED',doc:'SOP-PRD-001',rev:'Rev 4',user:'สมชาย K.',ip:'192.168.1.32',dept:'Production',detail:'Comparison with Rev 5 draft',session:'sess_sK_08052025'},
+  {seq:211,ts:'2025-05-07 11:22:44',action:'APPROVED',doc:'WI-QC-015',rev:'Rev 1',user:'ผู้อำนวยการ',ip:'172.16.0.5',dept:'Management',detail:'Initial approval — document Active',session:'sess_dir_07052025'},
+  {seq:210,ts:'2025-05-06 09:05:18',action:'SUBMITTED',doc:'WI-QC-015',rev:'Rev 1',user:'นภา P.',ip:'192.168.1.55',dept:'QA',detail:'Submitted via workflow: Standard',session:'sess_nP_06052025'},
+  {seq:209,ts:'2025-05-05 14:18:33',action:'EXPORTED',doc:'WI-PRD-042',rev:'Rev 2',user:'อนุชา T.',ip:'10.0.0.12',dept:'Engineering',detail:'Exported batch: 3 documents to PDF',session:'sess_aT_05052025'},
+];
+
+// Add computed hash fields
+const logs = rawLogs.map(r => ({
+  ...r,
+  hash: fakeHash(r.seq+r.ts+r.action+r.doc+r.user),
+  prevHash: fakePrevHash(r.seq),
+  integrity: true,
+}));
+
+/* ═══════════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════════ */
+const PAGE_SIZE = 12;
+let filtered = [...logs];
+let currentPage = 1;
+let sortKey = 'ts';
+let sortAsc = false;
+
+/* ═══════════════════════════════════════════════════════════
+   SIDEBAR / MODAL / EXPORT
+═══════════════════════════════════════════════════════════ */
+function toggleSidebar(){ document.getElementById('sidebar').classList.toggle('collapsed'); }
+function openModal(id){ document.getElementById(id).classList.add('open'); lucide.createIcons(); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', function(e){ if(e.target===this) this.classList.remove('open'); }));
+document.addEventListener('click', e => {
+  const menu = document.getElementById('export-menu');
+  if(!menu.contains(e.target)) menu.classList.remove('open');
+});
+function toggleExportMenu(){ document.getElementById('export-menu').classList.toggle('open'); }
+function doExport(type){
+  document.getElementById('export-menu').classList.remove('open');
+  const labels = {csv:'CSV',pdf:'PDF Report',json:'JSON'};
+  showToast(`กำลัง Export ${labels[type]} — ${filtered.length} records...`, 'info');
+  setTimeout(()=>showToast(`Export ${labels[type]} สำเร็จ`, 'success'), 1200);
+}
+function toggleAll(cb){ document.querySelectorAll('.row-check').forEach(c => c.checked = cb.checked); }
+
+/* ═══════════════════════════════════════════════════════════
+   STATS
+═══════════════════════════════════════════════════════════ */
+function renderStats(){
+  document.getElementById('stat-total').textContent = logs.length.toLocaleString();
+  const today = logs.filter(l => l.ts.startsWith('2025-05-28')).length;
+  document.getElementById('stat-today').textContent = today;
+  document.getElementById('stat-today-sub').textContent = 'actions วันนี้';
+  document.getElementById('stat-approve').textContent = logs.filter(l=>l.action==='APPROVED').length;
+  document.getElementById('stat-reject').textContent = logs.filter(l=>l.action==='REJECTED').length;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FILTERS
+═══════════════════════════════════════════════════════════ */
+function applyFilters(){
+  const q      = document.getElementById('f-search').value.toLowerCase();
+  const action = document.getElementById('f-action').value;
+  const user   = document.getElementById('f-user').value;
+  const doc    = document.getElementById('f-doc').value;
+  const from   = document.getElementById('f-date-from').value;
+  const to     = document.getElementById('f-date-to').value;
+  const hiSens = document.getElementById('highlight-sensitive').checked;
+
+  filtered = logs.filter(l => {
+    const mQ = !q || l.doc.toLowerCase().includes(q) || l.user.toLowerCase().includes(q) || l.detail.toLowerCase().includes(q) || l.ip.includes(q);
+    const mA = !action || l.action === action;
+    const mU = !user || l.user === user;
+    const mD = !doc || l.doc === doc;
+    const lDate = l.ts.substring(0,10);
+    const mF = !from || lDate >= from;
+    const mT = !to || lDate <= to;
+    return mQ && mA && mU && mD && mF && mT;
+  });
+
+  // Sort
+  filtered.sort((a,b) => {
+    let va = a[sortKey==='ts'?'ts':sortKey==='seq'?'seq':sortKey==='action'?'action':sortKey==='doc'?'doc':'user'];
+    let vb = b[sortKey==='ts'?'ts':sortKey==='seq'?'seq':sortKey==='action'?'action':sortKey==='doc'?'doc':'user'];
+    if(typeof va==='number') return sortAsc ? va-vb : vb-va;
+    return sortAsc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+  });
+
+  currentPage = 1;
+  renderChips();
+  renderTable(hiSens);
+  renderPagination();
+}
+
+function clearFilters(){
+  ['f-search','f-action','f-user','f-doc'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('f-date-from').value='2025-05-01';
+  document.getElementById('f-date-to').value='2025-05-28';
+  document.getElementById('highlight-sensitive').checked=false;
+  applyFilters();
+}
+
+function renderChips(){
+  const chips = [];
+  const fA=document.getElementById('f-action').value;
+  const fU=document.getElementById('f-user').value;
+  const fD=document.getElementById('f-doc').value;
+  if(fA) chips.push({label:'Action: '+fA,clear:()=>{document.getElementById('f-action').value='';applyFilters();}});
+  if(fU) chips.push({label:'ผู้ใช้: '+fU,clear:()=>{document.getElementById('f-user').value='';applyFilters();}});
+  if(fD) chips.push({label:'เอกสาร: '+fD,clear:()=>{document.getElementById('f-doc').value='';applyFilters();}});
+  const el = document.getElementById('active-chips');
+  el.innerHTML = chips.map((c,i)=>`
+    <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;background:var(--accent-dim);border:1px solid var(--accent-border);font-size:11px;font-weight:600;color:var(--accent)">
+      ${c.label}
+      <span onclick="clearChip(${i})" style="cursor:pointer;opacity:.7;line-height:1">×</span>
+    </span>`).join('');
+  el._chips = chips;
+}
+function clearChip(i){ document.getElementById('active-chips')._chips[i].clear(); }
+
+/* ═══════════════════════════════════════════════════════════
+   TABLE RENDER
+═══════════════════════════════════════════════════════════ */
+function renderTable(hiSens){
+  const tbody = document.getElementById('log-tbody');
+  const start = (currentPage-1)*PAGE_SIZE;
+  const slice = filtered.slice(start, start+PAGE_SIZE);
+  document.getElementById('result-count').textContent = `${filtered.length} รายการ`;
+  document.getElementById('page-info').textContent = `แสดง ${filtered.length?start+1:0}–${Math.min(start+PAGE_SIZE,filtered.length)} จาก ${filtered.length}`;
+
+  if(!slice.length){
+    tbody.innerHTML=`<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text3)">
+      <i data-lucide="search-x" style="width:32px;height:32px;display:block;margin:0 auto 10px"></i>ไม่พบ log ที่ตรงกับเงื่อนไข</td></tr>`;
+    lucide.createIcons(); return;
+  }
+
+  const meta = ACTIONS_META;
+  tbody.innerHTML = slice.map(l => {
+    const m = meta[l.action] || {icon:'circle',bg:'var(--bg4)',color:'var(--text3)',sensitive:false};
+    const isSens = m.sensitive && hiSens;
+    const hashShort = l.hash.substring(0,8)+'…'+l.hash.substring(56);
+    return `
+    <tr class="${isSens?'highlight':''}">
+      <td style="width:36px"><input type="checkbox" class="row-check" style="cursor:pointer"></td>
+      <td class="mono-cell" style="color:var(--text3)">#${l.seq}</td>
+      <td class="mono-cell" style="white-space:nowrap">${l.ts}</td>
+      <td><span class="action-badge act-${l.action}">
+        <i data-lucide="${m.icon}" style="width:10px;height:10px"></i>${l.action}
+        ${m.sensitive?'<i data-lucide="alert-triangle" style="width:9px;height:9px;color:var(--red)" title="Sensitive action"></i>':''}
+      </span></td>
+      <td>
+        <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text)">${l.doc}</div>
+        ${l.rev!=='—'?`<div style="font-size:10px;color:var(--text3)">${l.rev}</div>`:''}
+      </td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="width:22px;height:22px;border-radius:50%;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0">${l.user.substring(0,2)}</div>
+          <div>
+            <div style="font-size:12px;font-weight:500">${l.user}</div>
+            <div style="font-size:10px;color:var(--text3)">${l.dept}</div>
+          </div>
+        </div>
+      </td>
+      <td class="mono-cell">${l.ip}</td>
+      <td>
+        <span class="hash-short mono-cell" onclick="openDetail(${l.seq})" title="คลิกเพื่อดู hash เต็ม">${hashShort}</span>
+      </td>
+      <td>
+        ${l.integrity
+          ? '<span class="integrity-ok"><i data-lucide="shield-check" style="width:12px;height:12px"></i> OK</span>'
+          : '<span class="integrity-err"><i data-lucide="shield-x" style="width:12px;height:12px"></i> ERR</span>'}
+      </td>
+      <td>
+        <button class="btn btn-ghost btn-xs" onclick="openDetail(${l.seq})" title="ดูรายละเอียด">
+          <i data-lucide="eye" style="width:12px;height:12px"></i>
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+  lucide.createIcons();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SORT
+═══════════════════════════════════════════════════════════ */
+function sortBy(key){
+  if(sortKey===key) sortAsc=!sortAsc; else { sortKey=key; sortAsc=false; }
+  document.querySelectorAll('.audit-table th').forEach(th => th.classList.remove('sorted'));
+  applyFilters();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PAGINATION
+═══════════════════════════════════════════════════════════ */
+function renderPagination(){
+  const pages = Math.max(1, Math.ceil(filtered.length/PAGE_SIZE));
+  const el = document.getElementById('pagination');
+  let h = `<button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}><i data-lucide="chevron-left" style="width:13px;height:13px"></i></button>`;
+  for(let i=1;i<=pages;i++){
+    if(pages>7 && i>2 && i<pages-1 && Math.abs(i-currentPage)>1){
+      if(i===3||i===pages-2) h+=`<span style="padding:0 4px;color:var(--text3);font-size:12px">…</span>`;
+      continue;
+    }
+    h+=`<button class="page-btn${i===currentPage?' active':''}" onclick="goPage(${i})">${i}</button>`;
+  }
+  h+=`<button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===pages?'disabled':''}><i data-lucide="chevron-right" style="width:13px;height:13px"></i></button>`;
+  el.innerHTML=h; lucide.createIcons();
+}
+function goPage(p){
+  const pages=Math.max(1,Math.ceil(filtered.length/PAGE_SIZE));
+  if(p<1||p>pages)return;
+  currentPage=p; applyFilters();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DETAIL MODAL
+═══════════════════════════════════════════════════════════ */
+function openDetail(seq){
+  const l = logs.find(x=>x.seq===seq); if(!l)return;
+  const m = ACTIONS_META[l.action]||{icon:'circle',bg:'var(--bg4)',color:'var(--text3)'};
+  // Action header
+  document.getElementById('modal-action-icon').style.cssText=`width:38px;height:38px;border-radius:9px;background:${m.bg};color:${m.color};display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0`;
+  document.getElementById('modal-action-icon').innerHTML=`<i data-lucide="${m.icon}"></i>`;
+  document.getElementById('modal-action-label').innerHTML=`<span class="action-badge act-${l.action}">${l.action}</span>`;
+  document.getElementById('modal-action-sub').textContent=`Log #${l.seq} · ${l.ts}`;
+  document.getElementById('modal-integrity-badge').innerHTML=l.integrity
+    ?'<span class="integrity-ok" style="font-size:11px"><i data-lucide="shield-check" style="width:13px;height:13px"></i> Hash Verified</span>'
+    :'<span class="integrity-err" style="font-size:11px"><i data-lucide="shield-x" style="width:13px;height:13px"></i> Hash Mismatch</span>';
+  // KV
+  const kvData=[
+    {k:'เอกสาร',v:`<span style="font-family:var(--mono);font-weight:600">${l.doc}</span> <span style="color:var(--text3);font-size:12px">${l.rev}</span>`},
+    {k:'ผู้ดำเนินการ',v:`${l.user} <span style="color:var(--text3);font-size:11px">(${l.dept})</span>`},
+    {k:'Timestamp',v:`<span style="font-family:var(--mono)">${l.ts} +07:00</span>`},
+    {k:'IP Address',v:`<span style="font-family:var(--mono)">${l.ip}</span>`},
+    {k:'Session ID',v:`<span style="font-family:var(--mono);font-size:11px">${l.session}</span>`},
+    {k:'รายละเอียด',v:l.detail},
+    {k:'Sequence #',v:`<span style="font-family:var(--mono)">#${l.seq}</span>`},
+  ];
+  document.getElementById('modal-kv').innerHTML=kvData.map(kv=>`
+    <div class="detail-kv">
+      <div class="detail-key">${kv.k}</div>
+      <div class="detail-val">${kv.v}</div>
+    </div>`).join('');
+  // Hash block
+  document.getElementById('modal-hash-block').innerHTML=`
+    <div style="margin-bottom:5px"><span style="color:var(--text3);font-size:10px">PREV HASH:</span><br>${l.prevHash}</div>
+    <div style="margin-bottom:5px"><span style="color:var(--text3);font-size:10px">ENTRY HASH (SHA-256):</span><br><span style="color:var(--accent);font-weight:600">${l.hash}</span></div>
+    <div><span style="color:var(--text3);font-size:10px">HMAC-SHA256 (Server Key):</span><br>${fakeHash('hmac'+l.hash).substring(0,32)}…</div>`;
+  openModal('modal-detail');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CHAIN VERIFY MODAL
+═══════════════════════════════════════════════════════════ */
+function renderChainList(){
+  const sample = logs.slice(0,10);
+  document.getElementById('chain-list').innerHTML = sample.map(l=>`
+    <div class="chain-row">
+      <div class="chain-dot" style="background:${l.integrity?'var(--green)':'var(--red)'}"></div>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--text3);min-width:24px">#${l.seq}</span>
+      <span style="font-family:var(--mono);font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.hash.substring(0,24)}…</span>
+      <span class="action-badge act-${l.action}" style="font-size:9px">${l.action}</span>
+      <span style="font-size:10px;color:var(--text3)">${l.ts.substring(5,16)}</span>
+      ${l.integrity
+        ?'<span class="integrity-ok" style="font-size:10px"><i data-lucide="check" style="width:11px;height:11px"></i> OK</span>'
+        :'<span class="integrity-err" style="font-size:10px"><i data-lucide="x" style="width:11px;height:11px"></i> ERR</span>'}
+    </div>`).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════════════════════ */
+function showToast(msg,type='info'){
+  const wrap=document.getElementById('toast-wrap');
+  const t=document.createElement('div'); t.className='toast '+type;
+  const icons={success:'circle-check',error:'alert-circle',info:'info'};
+  const colors={success:'var(--green)',error:'var(--red)',info:'var(--accent)'};
+  t.innerHTML=`<i data-lucide="${icons[type]}" style="width:16px;height:16px;color:${colors[type]};flex-shrink:0"></i><span>${msg}</span>`;
+  wrap.appendChild(t); lucide.createIcons();
+  setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(20px)';t.style.transition='.2s';setTimeout(()=>t.remove(),200);},3500);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════════ */
+DMS_requireRole(['manager','qa','director','admin']);
+document.addEventListener('DOMContentLoaded',()=>{
+  renderStats();
+  applyFilters();
+  renderChainList();
+  lucide.createIcons();
+});
+
+// ── Role-aware init ──
+document.addEventListener('DOMContentLoaded', () => {
+  buildSidebar('04-audit-log');
+  DMS_applyRoleUI();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Factory DMS — ติดตามสถานะ</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="session.js"></script>
+<script src="sidebar.js"></script>
+<link rel="stylesheet" href="shared.css">
+<style>
+.emp-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(22,163,74,.1);color:var(--green);border:1px solid rgba(22,163,74,.2)}
+/* Workflow timeline horizontal */
+.wf-track{display:flex;align-items:flex-start;gap:0;margin:12px 0}
+.wf-node{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:70px}
+.wf-circle{width:36px;height:36px;border-radius:50%;border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:14px;background:var(--bg4);color:var(--text3);transition:all .2s}
+.wf-circle.done{background:var(--green-dim);border-color:var(--green);color:var(--green)}
+.wf-circle.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.wf-circle.reject{background:var(--red-dim);border-color:var(--red);color:var(--red)}
+.wf-name{font-size:10px;font-weight:600;color:var(--text3);text-align:center;line-height:1.3;max-width:64px}
+.wf-name.done{color:var(--green)}.wf-name.active{color:var(--accent)}.wf-name.reject{color:var(--red)}
+.wf-date{font-size:9px;color:var(--text3);text-align:center}
+.wf-line{flex:1;height:2px;background:var(--border2);margin-top:17px;min-width:16px}
+.wf-line.done{background:var(--green)}
+/* History timeline vertical */
+.hist-wrap{position:relative;padding-left:22px}
+.hist-wrap::before{content:'';position:absolute;left:7px;top:6px;bottom:6px;width:1.5px;background:var(--border2)}
+.hist-item{position:relative;margin-bottom:14px}
+.hist-item::before{content:'';position:absolute;left:-18px;top:5px;width:8px;height:8px;border-radius:50%;background:var(--bg4);border:2px solid var(--bg2)}
+.hist-item.done::before{background:var(--green)}
+.hist-item.active::before{background:var(--accent)}
+.hist-item.reject::before{background:var(--red)}
+/* Tracking card */
+.track-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:12px;overflow:hidden;box-shadow:var(--shadow);cursor:pointer;transition:box-shadow .15s}
+.track-card:hover{box-shadow:var(--shadow-md)}
+.track-card.urgent{border-left:3px solid var(--red)}
+.track-card.approved{border-left:3px solid var(--green)}
+.track-card.pending{border-left:3px solid var(--amber)}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="btn btn-ghost btn-sm" onclick="toggleSidebar()" style="padding:5px 8px"><i data-lucide="menu"></i></button>
+      <span id="topbar-role" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;margin-right:4px"></span><div class="page-title">ติดตามสถานะ <span class="page-sub">Approval Tracking</span></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-ghost btn-sm" onclick="location.href='emp-04-notification.html'" style="position:relative">
+          <i data-lucide="bell"></i>
+          <span style="position:absolute;top:4px;right:4px;width:6px;height:6px;background:var(--red);border-radius:50%"></span>
+        </button>
+        <div class="avatar" style="cursor:pointer" onclick="location.href='00-login.html'">AT</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- Summary strip -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+        <div class="stat-box" style="border-left:3px solid var(--amber)"><div class="stat-label">รออนุมัติ</div><div class="stat-value" style="color:var(--amber)">2</div><div class="stat-sub">กำลังดำเนินการ</div></div>
+        <div class="stat-box" style="border-left:3px solid var(--red)"><div class="stat-label">ต้องแก้ไข</div><div class="stat-value" style="color:var(--red)">1</div><div class="stat-sub">รอฉันดำเนินการ</div></div>
+        <div class="stat-box" style="border-left:3px solid var(--green)"><div class="stat-label">อนุมัติแล้ว</div><div class="stat-value" style="color:var(--green)">5</div><div class="stat-sub">เดือนนี้</div></div>
+        <div class="stat-box" style="border-left:3px solid var(--text3)"><div class="stat-label">เฉลี่ย</div><div class="stat-value" style="color:var(--text3)">2.1</div><div class="stat-sub">วันต่อรายการ</div></div>
+      </div>
+
+      <!-- Filter tabs -->
+      <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="chip active" onclick="filterTrack('all',this)">ทั้งหมด (8)</button>
+        <button class="chip" onclick="filterTrack('pending',this)">รออนุมัติ (2)</button>
+        <button class="chip" onclick="filterTrack('rejected',this)">ต้องแก้ไข (1)</button>
+        <button class="chip" onclick="filterTrack('approved',this)">อนุมัติแล้ว (5)</button>
+      </div>
+
+      <!-- Tracking list -->
+      <div id="track-list"></div>
+    </div>
+  </main>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="modal-track">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-header">
+      <div class="modal-title" id="tr-title">—</div>
+      <button class="modal-close" onclick="closeModal('modal-track')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body" id="tr-body"></div>
+    <div class="modal-footer" id="tr-footer"></div>
+  </div>
+</div>
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script>
+const trackData=[
+  {code:'SOP-ENG-022',name:'การ Calibrate เครื่องชั่ง Class II',rev:'Rev 1',status:'rejected',submitted:'24 พ.ค. 68',
+   note:'เอกสารใหม่ — ขั้นตอน Calibrate ตาม OIML R 76',
+   rejectNote:'ข้อมูล Spec ไม่ครบถ้วน — กรุณาระบุ tolerance range และเพิ่ม reference OIML R 76',
+   rejectedBy:'Safety Officer',rejectedDate:'27 พ.ค. 68 16:05',
+   steps:[
+     {name:'Author',who:'อนุชา T.',date:'24 พ.ค. 68',state:'done'},
+     {name:'Eng. Lead',who:'พิมพ์ W.',date:'25 พ.ค. 68',state:'done'},
+     {name:'Safety',who:'วิชัย S.',date:'27 พ.ค. 68',state:'reject'},
+     {name:'ผจก.',who:'—',date:'—',state:'pending'},
+   ],
+   history:[
+     {action:'ส่งกลับแก้ไข',by:'วิชัย S. (Safety)',date:'27 พ.ค. 68 16:05',color:'var(--red)'},
+     {action:'ผ่าน Eng. Lead',by:'พิมพ์ W.',date:'25 พ.ค. 68 10:30',color:'var(--green)'},
+     {action:'ส่งขออนุมัติ',by:'อนุชา T.',date:'24 พ.ค. 68 14:30',color:'var(--accent)'},
+     {action:'สร้างเอกสาร',by:'อนุชา T.',date:'24 พ.ค. 68 14:00',color:'var(--text3)'},
+   ]
+  },
+  {code:'WI-ENG-015',name:'การทำความสะอาดเครื่อง Compactor M-03',rev:'Rev 2',status:'pending',submitted:'22 พ.ค. 68',
+   note:'เพิ่มขั้นตอน CIP และ validation criteria',
+   steps:[
+     {name:'Author',who:'อนุชา T.',date:'22 พ.ค. 68',state:'done'},
+     {name:'Eng. Lead',who:'พิมพ์ W.',date:'23 พ.ค. 68',state:'done'},
+     {name:'Safety',who:'วิชัย S.',date:'—',state:'active'},
+     {name:'ผจก.',who:'—',date:'—',state:'pending'},
+   ],
+   history:[
+     {action:'ผ่าน Eng. Lead',by:'พิมพ์ W.',date:'23 พ.ค. 68 14:00',color:'var(--green)'},
+     {action:'ส่งขออนุมัติ',by:'อนุชา T.',date:'22 พ.ค. 68 09:00',color:'var(--accent)'},
+   ]
+  },
+  {code:'SOP-ENG-019',name:'PM รายไตรมาส — เครื่อง Granulator',rev:'Rev 3',status:'pending',submitted:'18 พ.ค. 68',
+   note:'อัปเดตรายการ replacement parts ตาม OEM bulletin',
+   steps:[
+     {name:'Author',who:'อนุชา T.',date:'18 พ.ค. 68',state:'done'},
+     {name:'Eng. Lead',who:'พิมพ์ W.',date:'—',state:'active'},
+     {name:'ผจก.',who:'—',date:'—',state:'pending'},
+   ],
+   history:[
+     {action:'ส่งขออนุมัติ',by:'อนุชา T.',date:'18 พ.ค. 68 10:00',color:'var(--accent)'},
+   ]
+  },
+  {code:'WI-ENG-008',name:'การตรวจสอบ Pressure Gauge ประจำสัปดาห์',rev:'Rev 4',status:'approved',submitted:'08 พ.ค. 68',
+   note:'เพิ่ม calibration interval สำหรับ critical instruments',
+   steps:[
+     {name:'Author',who:'อนุชา T.',date:'08 พ.ค. 68',state:'done'},
+     {name:'Eng. Lead',who:'พิมพ์ W.',date:'09 พ.ค. 68',state:'done'},
+     {name:'Safety',who:'วิชัย S.',date:'10 พ.ค. 68',state:'done'},
+     {name:'ผจก.',who:'ผู้จัดการ',date:'10 พ.ค. 68',state:'done'},
+   ],
+   history:[
+     {action:'อนุมัติแล้ว — Active',by:'ผู้จัดการ',date:'10 พ.ค. 68 15:00',color:'var(--green)'},
+     {action:'ผ่าน Safety',by:'วิชัย S.',date:'10 พ.ค. 68 10:00',color:'var(--green)'},
+     {action:'ผ่าน Eng. Lead',by:'พิมพ์ W.',date:'09 พ.ค. 68 14:00',color:'var(--green)'},
+     {action:'ส่งขออนุมัติ',by:'อนุชา T.',date:'08 พ.ค. 68 09:00',color:'var(--accent)'},
+   ]
+  },
+  {code:'SOP-ENG-007B',name:'Preventive Maintenance Compactor M-02 (ฉบับใหม่)',rev:'Rev 1',status:'approved',submitted:'02 พ.ค. 68',
+   note:'Supersede SOP-ENG-007 — ขั้นตอนครบถ้วนกว่า',
+   steps:[{name:'Author',who:'อนุชา T.',date:'02 พ.ค. 68',state:'done'},{name:'Eng. Lead',who:'พิมพ์ W.',date:'03 พ.ค. 68',state:'done'},{name:'ผจก.',who:'ผู้จัดการ',date:'05 พ.ค. 68',state:'done'}],
+   history:[{action:'อนุมัติแล้ว — Active',by:'ผู้จัดการ',date:'05 พ.ค. 68',color:'var(--green)'},{action:'ส่งขออนุมัติ',by:'อนุชา T.',date:'02 พ.ค. 68',color:'var(--accent)'}]
+  },
+];
+
+let currentFilter='all';
+
+function filterTrack(f,btn){
+  currentFilter=f;
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  btn.classList.add('active');
+  renderTrack();
+}
+
+function renderTrack(){
+  const data=currentFilter==='all'?trackData:trackData.filter(d=>d.status===currentFilter);
+  const el=document.getElementById('track-list');
+  const sb={approved:'badge-green',pending:'badge-amber',rejected:'badge-red'};
+  const sl={approved:'อนุมัติแล้ว',pending:'รออนุมัติ',rejected:'ต้องแก้ไข'};
+  if(!data.length){el.innerHTML='<div style="text-align:center;padding:32px;color:var(--text3)">ไม่มีรายการ</div>';return;}
+  el.innerHTML=data.map(d=>`
+    <div class="track-card ${d.status}" onclick="openTrackDetail('${d.code}')">
+      <div style="padding:12px 14px;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+          <span style="font-family:var(--mono);font-size:12px;font-weight:700">${d.code}</span>
+          <span class="badge badge-gray" style="font-size:9px">${d.rev}</span>
+          <span class="badge ${sb[d.status]}">${sl[d.status]}</span>
+          <span style="font-size:11px;color:var(--text3);margin-left:auto">ส่ง ${d.submitted}</span>
+        </div>
+        <div style="font-size:13px;color:var(--text2)">${d.name}</div>
+      </div>
+      <div style="padding:10px 14px">
+        <div class="wf-track">
+          ${d.steps.map((s,i)=>`
+            <div class="wf-node">
+              <div class="wf-circle ${s.state}">
+                ${s.state==='done'?'<i data-lucide="check" style="width:14px;height:14px"></i>':s.state==='reject'?'<i data-lucide="x" style="width:14px;height:14px"></i>':s.state==='active'?'<i data-lucide="clock" style="width:13px;height:13px"></i>':(i+1)}
+              </div>
+              <div class="wf-name ${s.state}">${s.name}</div>
+              ${s.date!=='—'?`<div class="wf-date">${s.date.replace(' 68','')}</div>`:''}
+            </div>
+            ${i<d.steps.length-1?`<div class="wf-line${s.state==='done'?' done':''}"></div>`:''}`).join('')}
+        </div>
+        ${d.rejectNote?`<div style="background:var(--red-dim);border:1px solid rgba(220,38,38,.15);border-radius:6px;padding:7px 10px;font-size:11px;color:var(--red);margin-top:4px"><i data-lucide="alert-circle" style="width:11px;height:11px"></i> ${d.rejectNote}</div>`:''}
+        <div style="display:flex;gap:6px;margin-top:8px" onclick="event.stopPropagation()">
+          ${d.status==='rejected'?`<button class="btn btn-primary btn-sm" onclick="location.href='emp-01-my-documents.html'"><i data-lucide="pencil"></i> แก้ไขและส่งใหม่</button>`:''}
+          <button class="btn btn-ghost btn-sm" onclick="openTrackDetail('${d.code}')"><i data-lucide="info"></i> ดูรายละเอียด</button>
+          <button class="btn btn-ghost btn-sm" onclick="showToast('ดาวน์โหลด ${d.code}','info')"><i data-lucide="download"></i></button>
+        </div>
+      </div>
+    </div>`).join('');
+  lucide.createIcons();
+}
+
+function openTrackDetail(code){
+  const d=trackData.find(x=>x.code===code);if(!d)return;
+  const sb={approved:'badge-green',pending:'badge-amber',rejected:'badge-red'};
+  const sl={approved:'อนุมัติแล้ว',pending:'รออนุมัติ',rejected:'ต้องแก้ไข'};
+  document.getElementById('tr-title').innerHTML=`<i data-lucide="git-branch" style="color:var(--accent)"></i> ${d.code} — ติดตามสถานะ`;
+  document.getElementById('tr-body').innerHTML=`
+    <div style="display:flex;gap:6px;margin-bottom:12px">
+      <span class="badge ${sb[d.status]}">${sl[d.status]}</span>
+      <span class="badge badge-gray">${d.rev}</span>
+    </div>
+    <div class="meta-grid" style="margin-bottom:14px">
+      <div class="meta-item"><div class="meta-key">เอกสาร</div><div class="meta-val" style="font-family:var(--mono);font-size:12px">${d.code}</div></div>
+      <div class="meta-item"><div class="meta-key">วันที่ส่ง</div><div class="meta-val" style="font-size:12px">${d.submitted}</div></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Workflow Progress</div>
+    <div class="wf-track" style="margin-bottom:14px">
+      ${d.steps.map((s,i)=>`
+        <div class="wf-node">
+          <div class="wf-circle ${s.state}">${s.state==='done'?'<i data-lucide="check" style="width:14px;height:14px"></i>':s.state==='reject'?'<i data-lucide="x" style="width:14px;height:14px"></i>':s.state==='active'?'<i data-lucide="clock" style="width:13px;height:13px"></i>':(i+1)}</div>
+          <div class="wf-name ${s.state}">${s.name}</div>
+          <div class="wf-date">${s.who!=='—'?s.who:''}</div>
+          ${s.date!=='—'?`<div class="wf-date">${s.date}</div>`:''}
+        </div>
+        ${i<d.steps.length-1?`<div class="wf-line${s.state==='done'?' done':''}"></div>`:''}`).join('')}
+    </div>
+    ${d.rejectNote?`<div style="background:var(--red-dim);border:1px solid rgba(220,38,38,.15);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--red);margin-bottom:14px"><div style="font-weight:700;margin-bottom:3px">ความเห็นผู้ตรวจ (${d.rejectedBy} · ${d.rejectedDate}):</div>${d.rejectNote}</div>`:''}
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">ประวัติดำเนินการ</div>
+    <div class="hist-wrap">
+      ${d.history.map(h=>`
+        <div class="hist-item ${h.color.includes('green')?'done':h.color.includes('red')?'reject':'active'}">
+          <div style="font-size:12px;font-weight:600;color:${h.color}">${h.action}</div>
+          <div style="font-size:11px;color:var(--text2)">${h.by}</div>
+          <div style="font-size:10px;color:var(--text3)">${h.date}</div>
+        </div>`).join('')}
+    </div>`;
+  document.getElementById('tr-footer').innerHTML=`
+    <button class="btn btn-ghost" onclick="closeModal('modal-track')">ปิด</button>
+    <button class="btn btn-ghost" onclick="showToast('ดาวน์โหลด','info')"><i data-lucide="download"></i> ดาวน์โหลด</button>
+    ${d.status==='rejected'?`<button class="btn btn-primary" onclick="closeModal('modal-track');location.href='emp-01-my-documents.html'"><i data-lucide="pencil"></i> แก้ไขและส่งใหม่</button>`:''}`;
+  openModal('modal-track');
+}
+
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('collapsed');}
+function openModal(id){document.getElementById(id).classList.add('open');lucide.createIcons();}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');}));
+function showToast(msg,type='info'){
+  const wrap=document.getElementById('toast-wrap'),t=document.createElement('div');t.className='toast '+type;
+  const ic={success:'circle-check',error:'alert-circle',info:'info'};
+  const co={success:'var(--green)',error:'var(--red)',info:'var(--accent)'};
+  t.innerHTML=`<i data-lucide="${ic[type]}" style="width:16px;height:16px;color:${co[type]};flex-shrink:0"></i><span>${msg}</span>`;
+  wrap.appendChild(t);lucide.createIcons();
+  setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(20px)';t.style.transition='.2s';setTimeout(()=>t.remove(),200);},3500);
+}
+document.addEventListener('DOMContentLoaded',()=>{renderTrack();lucide.createIcons();});
+
+// ── Role-aware init ──
+document.addEventListener('DOMContentLoaded', () => {
+  buildSidebar('emp-03-tracking');
+  DMS_applyRoleUI();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+});
+</script>
+</body>
+</html>

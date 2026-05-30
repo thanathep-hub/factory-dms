@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Factory DMS — Notification</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="session.js"></script>
+<script src="sidebar.js"></script>
+<link rel="stylesheet" href="shared.css">
+<style>
+/* ── Page layout ── */
+.notif-layout { display:grid; grid-template-columns:1fr 380px; gap:16px; align-items:start; }
+
+/* ── Inbox tabs ── */
+.inbox-tabs { display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:0; }
+.inbox-tab { padding:10px 18px; background:none; border:none; border-bottom:2px solid transparent;
+  font-family:var(--font); font-size:13px; font-weight:600; color:var(--text3); cursor:pointer;
+  transition:all .15s; margin-bottom:-1px; display:flex; align-items:center; gap:6px; }
+.inbox-tab:hover { color:var(--text2); }
+.inbox-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+.inbox-tab .tab-count { font-size:10px; padding:1px 6px; border-radius:99px; font-family:var(--mono); font-weight:700; }
+
+/* ── Notification item ── */
+.notif-item { display:flex; gap:12px; padding:14px 16px; border-bottom:1px solid var(--border);
+  cursor:pointer; transition:background .12s; position:relative; }
+.notif-item:last-child { border-bottom:none; }
+.notif-item:hover { background:var(--bg3); }
+.notif-item.unread { background:rgba(37,99,235,.03); }
+.notif-item.unread::before { content:''; position:absolute; left:0; top:0; bottom:0;
+  width:3px; border-radius:0 2px 2px 0; background:var(--accent); }
+.notif-icon { width:38px; height:38px; border-radius:10px; display:flex; align-items:center;
+  justify-content:center; font-size:17px; flex-shrink:0; }
+.notif-title { font-size:13px; font-weight:600; color:var(--text); margin-bottom:2px; }
+.notif-title.unread-text { color:var(--text); }
+.notif-body { font-size:12px; color:var(--text2); line-height:1.5; margin-bottom:4px; }
+.notif-meta { font-size:10px; color:var(--text3); display:flex; align-items:center; gap:8px; }
+.notif-actions { display:flex; gap:5px; margin-top:6px; flex-wrap:wrap; }
+.unread-dot { width:8px; height:8px; border-radius:50%; background:var(--accent);
+  flex-shrink:0; margin-top:6px; }
+
+/* ── Priority colors ── */
+.p-critical { background:rgba(220,38,38,.1);  color:var(--red);    }
+.p-warning  { background:rgba(180,83,9,.1);   color:var(--amber);  }
+.p-info     { background:rgba(37,99,235,.1);  color:var(--accent); }
+.p-success  { background:rgba(22,163,74,.1);  color:var(--green);  }
+.p-neutral  { background:var(--bg4);           color:var(--text3);  }
+
+/* ── Settings panel ── */
+.settings-section { margin-bottom:20px; }
+.settings-section-title { font-size:11px; font-weight:700; color:var(--text3);
+  text-transform:uppercase; letter-spacing:.07em; margin-bottom:10px;
+  display:flex; align-items:center; gap:6px; }
+
+/* ── Channel toggle row ── */
+.channel-row { display:flex; align-items:center; gap:10px; padding:10px 12px;
+  background:var(--bg3); border-radius:var(--radius); border:1px solid var(--border);
+  margin-bottom:6px; transition:border-color .15s; }
+.channel-row:hover { border-color:var(--border2); }
+.channel-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center;
+  justify-content:center; font-size:15px; flex-shrink:0; }
+.channel-name { font-size:13px; font-weight:600; flex:1; }
+.channel-sub  { font-size:11px; color:var(--text3); margin-top:1px; }
+/* Toggle switch */
+.toggle { position:relative; width:40px; height:22px; flex-shrink:0; }
+.toggle input { opacity:0; width:0; height:0; }
+.toggle-slider { position:absolute; inset:0; background:var(--bg4); border-radius:99px;
+  cursor:pointer; transition:.2s; border:1px solid var(--border2); }
+.toggle-slider::before { content:''; position:absolute; width:16px; height:16px;
+  left:2px; top:2px; background:#fff; border-radius:50%; transition:.2s;
+  box-shadow:0 1px 3px rgba(0,0,0,.15); }
+.toggle input:checked + .toggle-slider { background:var(--accent); border-color:var(--accent); }
+.toggle input:checked + .toggle-slider::before { transform:translateX(18px); }
+
+/* ── Event trigger rows ── */
+.trigger-row { padding:10px 12px; background:var(--bg3); border-radius:var(--radius);
+  border:1px solid var(--border); margin-bottom:6px; }
+.trigger-header { display:flex; align-items:center; gap:8px; margin-bottom:0; cursor:pointer; }
+.trigger-header.open { margin-bottom:10px; }
+.trigger-name { font-size:12px; font-weight:600; flex:1; }
+.trigger-channel-dots { display:flex; gap:4px; }
+.trigger-dot { width:7px; height:7px; border-radius:50%; }
+.trigger-detail { display:none; padding-top:8px; border-top:1px solid var(--border); }
+.trigger-detail.open { display:block; }
+.channel-checkbox { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text2);
+  cursor:pointer; padding:4px 0; }
+.channel-checkbox input { accent-color:var(--accent); cursor:pointer; }
+.delay-select { font-size:11px; background:var(--bg2); border:1px solid var(--border2);
+  border-radius:5px; padding:3px 6px; color:var(--text); font-family:var(--font); outline:none; }
+
+/* ── Quiet hours ── */
+.quiet-row { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text2);
+  padding:6px 0; }
+.time-input { width:80px; background:var(--bg3); border:1px solid var(--border2);
+  border-radius:6px; padding:5px 8px; font-family:var(--mono); font-size:12px;
+  color:var(--text); outline:none; }
+.time-input:focus { border-color:var(--accent); }
+
+/* ── Stats strip ── */
+.notif-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px; }
+
+/* ── Empty state ── */
+.inbox-empty { text-align:center; padding:48px 20px; color:var(--text3); }
+
+/* ── Bulk bar ── */
+.bulk-bar { display:flex; align-items:center; gap:8px; padding:8px 14px;
+  background:var(--accent-dim); border-bottom:1px solid var(--accent-border);
+  font-size:12px; color:var(--accent); display:none; }
+.bulk-bar.visible { display:flex; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="btn btn-ghost btn-sm" onclick="toggleSidebar()" style="padding:5px 8px"><i data-lucide="menu"></i></button>
+      <span id="topbar-role" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;margin-right:4px"></span><div class="page-title">Notification <span class="page-sub">แจ้งเตือนและการตั้งค่า</span></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-ghost btn-sm" onclick="markAllRead()"><i data-lucide="check-check"></i> อ่านทั้งหมด</button>
+        <div class="divider"></div>
+        <div class="avatar" style="cursor:pointer" onclick="location.href='00-login.html'">SK</div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- Stats -->
+      <div class="notif-stats">
+        <div class="stat-box"><div class="stat-label">ยังไม่อ่าน</div><div class="stat-value" style="color:var(--accent)" id="st-unread">3</div><div class="stat-sub">รอดำเนินการ</div></div>
+        <div class="stat-box"><div class="stat-label">วันนี้</div><div class="stat-value" style="color:var(--text)" id="st-today">6</div><div class="stat-sub">แจ้งเตือนทั้งวัน</div></div>
+        <div class="stat-box"><div class="stat-label">เร่งด่วน</div><div class="stat-value" style="color:var(--red)" id="st-urgent">2</div><div class="stat-sub">ต้องดำเนินการ</div></div>
+        <div class="stat-box"><div class="stat-label">Channel ที่เปิด</div><div class="stat-value" style="color:var(--green)" id="st-channels">2</div><div class="stat-sub">จาก 4 ช่องทาง</div></div>
+      </div>
+
+      <div class="notif-layout">
+
+        <!-- LEFT: Inbox -->
+        <div>
+          <div class="card" style="padding:0;overflow:hidden">
+
+            <!-- Tabs -->
+            <div style="padding:0 4px;border-bottom:1px solid var(--border)">
+              <div class="inbox-tabs">
+                <button class="inbox-tab active" onclick="switchTab('all',this)">
+                  ทั้งหมด <span class="tab-count" style="background:var(--bg4);color:var(--text3)" id="cnt-all">—</span>
+                </button>
+                <button class="inbox-tab" onclick="switchTab('unread',this)">
+                  ยังไม่อ่าน <span class="tab-count" style="background:var(--accent-dim);color:var(--accent)" id="cnt-unread">—</span>
+                </button>
+                <button class="inbox-tab" onclick="switchTab('urgent',this)">
+                  เร่งด่วน <span class="tab-count" style="background:var(--red-dim);color:var(--red)" id="cnt-urgent">—</span>
+                </button>
+                <button class="inbox-tab" onclick="switchTab('read',this)">
+                  อ่านแล้ว <span class="tab-count" style="background:var(--bg4);color:var(--text3)" id="cnt-read">—</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Filter + bulk bar -->
+            <div style="padding:8px 14px;border-bottom:1px solid var(--border);display:flex;gap:7px;align-items:center">
+              <div class="search-box" style="flex:1;padding:6px 10px">
+                <i data-lucide="search" style="width:13px;height:13px;color:var(--text3)"></i>
+                <input type="text" placeholder="ค้นหาแจ้งเตือน..." oninput="filterInbox(this.value)" style="font-size:12px">
+              </div>
+              <select class="filter-select" style="font-size:11px" onchange="filterByType(this.value)">
+                <option value="">ทุกประเภท</option>
+                <option value="approval">Approval</option>
+                <option value="expiry">หมดอายุ</option>
+                <option value="system">ระบบ</option>
+                <option value="mention">กล่าวถึง</option>
+              </select>
+            </div>
+
+            <!-- Bulk action bar -->
+            <div class="bulk-bar" id="bulk-bar">
+              <i data-lucide="check-square" style="width:14px;height:14px"></i>
+              <span id="bulk-count">0</span> รายการที่เลือก
+              <button class="btn btn-ghost btn-sm" onclick="bulkMarkRead()" style="font-size:11px;padding:3px 8px">ทำเครื่องหมายว่าอ่านแล้ว</button>
+              <button class="btn btn-ghost btn-sm" onclick="bulkDelete()" style="font-size:11px;padding:3px 8px;color:var(--red)"><i data-lucide="trash-2" style="width:12px;height:12px"></i> ลบ</button>
+              <button class="btn btn-ghost btn-sm" onclick="clearBulk()" style="font-size:11px;padding:3px 8px;margin-left:auto"><i data-lucide="x" style="width:12px;height:12px"></i></button>
+            </div>
+
+            <!-- Notification list -->
+            <div id="notif-list" style="max-height:620px;overflow-y:auto"></div>
+
+          </div>
+        </div>
+
+        <!-- RIGHT: Settings panel -->
+        <div>
+
+          <!-- Channel settings -->
+          <div class="card" style="margin-bottom:14px">
+            <div class="settings-section-title" style="margin-bottom:12px">
+              <i data-lucide="radio" style="width:14px;height:14px;color:var(--accent)"></i>
+              ช่องทางการแจ้งเตือน
+            </div>
+
+            <!-- In-app -->
+            <div class="channel-row">
+              <div class="channel-icon" style="background:rgba(37,99,235,.1);color:var(--accent)"><i data-lucide="bell"></i></div>
+              <div style="flex:1">
+                <div class="channel-name">In-app</div>
+                <div class="channel-sub">แจ้งเตือนภายในระบบ DMS</div>
+              </div>
+              <label class="toggle"><input type="checkbox" checked onchange="updateChannelStat()"><span class="toggle-slider"></span></label>
+            </div>
+
+            <!-- Email -->
+            <div class="channel-row">
+              <div class="channel-icon" style="background:rgba(22,163,74,.1);color:var(--green)"><i data-lucide="mail"></i></div>
+              <div style="flex:1">
+                <div class="channel-name">Email</div>
+                <div class="channel-sub">somchai.k@factory-a.co.th</div>
+              </div>
+              <label class="toggle"><input type="checkbox" checked onchange="updateChannelStat()"><span class="toggle-slider"></span></label>
+            </div>
+
+            <!-- Line OA -->
+            <div class="channel-row">
+              <div class="channel-icon" style="background:rgba(22,163,74,.1);color:#06b25f"><i data-lucide="message-circle"></i></div>
+              <div style="flex:1">
+                <div class="channel-name">Line OA</div>
+                <div class="channel-sub" id="line-sub">ยังไม่ได้เชื่อมต่อ</div>
+              </div>
+              <button class="btn btn-ghost btn-sm" onclick="connectLine()" style="font-size:11px" id="line-btn">เชื่อมต่อ</button>
+            </div>
+
+            <!-- SMS -->
+            <div class="channel-row">
+              <div class="channel-icon" style="background:rgba(124,58,237,.1);color:var(--purple)"><i data-lucide="smartphone"></i></div>
+              <div style="flex:1">
+                <div class="channel-name">SMS</div>
+                <div class="channel-sub" id="sms-sub">ยังไม่ได้ตั้งค่าเบอร์โทร</div>
+              </div>
+              <button class="btn btn-ghost btn-sm" onclick="openModal('modal-sms')" style="font-size:11px">ตั้งค่า</button>
+            </div>
+          </div>
+
+          <!-- Event triggers -->
+          <div class="card" style="margin-bottom:14px">
+            <div class="settings-section-title" style="margin-bottom:12px">
+              <i data-lucide="zap" style="width:14px;height:14px;color:var(--amber)"></i>
+              ตั้งค่า Trigger แต่ละ Event
+            </div>
+            <div id="trigger-list"></div>
+          </div>
+
+          <!-- Quiet hours -->
+          <div class="card">
+            <div class="settings-section-title" style="margin-bottom:12px">
+              <i data-lucide="moon" style="width:14px;height:14px;color:var(--purple)"></i>
+              Quiet Hours (ไม่รับแจ้งเตือน)
+            </div>
+            <div style="margin-bottom:10px">
+              <div class="quiet-row">
+                <label class="toggle"><input type="checkbox" id="qh-toggle" onchange="toggleQuietHours()"><span class="toggle-slider"></span></label>
+                <span style="font-weight:600">เปิดใช้ Quiet Hours</span>
+              </div>
+              <div id="qh-detail" style="display:none;margin-top:10px">
+                <div class="quiet-row">
+                  <span style="min-width:50px">เริ่ม:</span>
+                  <input type="time" class="time-input" value="22:00">
+                  <span style="color:var(--text3)">น.</span>
+                </div>
+                <div class="quiet-row">
+                  <span style="min-width:50px">สิ้นสุด:</span>
+                  <input type="time" class="time-input" value="07:00">
+                  <span style="color:var(--text3)">น.</span>
+                </div>
+                <div style="margin-top:8px">
+                  <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">ยกเว้น (ยังรับ Quiet Hours)</div>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);padding:3px 0;cursor:pointer"><input type="checkbox" checked style="accent-color:var(--red)"> เร่งด่วน / Critical</label>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);padding:3px 0;cursor:pointer"><input type="checkbox" style="accent-color:var(--red)"> Approval ที่ใกล้หมดเวลา</label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Digest mode -->
+            <div style="border-top:1px solid var(--border);padding-top:12px">
+              <div style="font-size:12px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px;color:var(--text2)">
+                <i data-lucide="layers" style="width:13px;height:13px"></i> Email Digest
+              </div>
+              <select class="form-input" style="font-size:12px">
+                <option>ส่งทันทีทุกครั้ง (Real-time)</option>
+                <option>รวมส่งทุก 1 ชม.</option>
+                <option selected>รวมส่งวันละครั้ง (08:00)</option>
+                <option>รวมส่งสัปดาห์ละครั้ง (จันทร์ 08:00)</option>
+              </select>
+            </div>
+
+            <div style="margin-top:12px;text-align:right">
+              <button class="btn btn-primary btn-sm" onclick="saveSettings()"><i data-lucide="save"></i> บันทึกการตั้งค่า</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- NOTIFICATION DETAIL MODAL -->
+<div class="modal-overlay" id="modal-notif">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-notif-title">—</div>
+      <button class="modal-close" onclick="closeModal('modal-notif')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div id="modal-notif-body"></div>
+    </div>
+    <div class="modal-footer" id="modal-notif-footer"></div>
+  </div>
+</div>
+
+<!-- SMS SETUP MODAL -->
+<div class="modal-overlay" id="modal-sms">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <div class="modal-title"><i data-lucide="smartphone" style="color:var(--purple)"></i> ตั้งค่า SMS</div>
+      <button class="modal-close" onclick="closeModal('modal-sms')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">เบอร์โทรศัพท์</label>
+        <input class="form-input" type="tel" placeholder="เช่น 0812345678" id="sms-phone">
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">ส่ง OTP ยืนยัน</label>
+        <div style="display:flex;gap:8px">
+          <input class="form-input" placeholder="รหัส OTP 6 หลัก" id="sms-otp" style="flex:1">
+          <button class="btn btn-ghost btn-sm" onclick="sendOTP()" style="flex-shrink:0">ส่ง OTP</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-sms')">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="confirmSMS()"><i data-lucide="check"></i> ยืนยัน</button>
+    </div>
+  </div>
+</div>
+
+<!-- LINE CONNECT MODAL -->
+<div class="modal-overlay" id="modal-line">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title"><i data-lucide="message-circle" style="color:#06b25f"></i> เชื่อมต่อ Line OA</div>
+      <button class="modal-close" onclick="closeModal('modal-line')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="text-align:center;padding:8px 0 16px">
+        <div style="width:80px;height:80px;background:rgba(6,178,95,.1);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:36px;color:#06b25f">
+          <i data-lucide="message-circle"></i>
+        </div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:6px">สแกน QR Code ด้วย Line</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:16px">เพื่อรับการแจ้งเตือนจาก FactoryDMS OA</div>
+        <!-- Fake QR -->
+        <div style="width:140px;height:140px;margin:0 auto;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;display:flex;align-items:center;justify-content:center;padding:10px">
+          <svg viewBox="0 0 7 7" width="120" height="120" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="0" width="3" height="3" fill="currentColor" rx=".2"/>
+            <rect x="4" y="0" width="3" height="3" fill="currentColor" rx=".2"/>
+            <rect x="0" y="4" width="3" height="3" fill="currentColor" rx=".2"/>
+            <rect x="1" y="1" width="1" height="1" fill="white"/>
+            <rect x="5" y="1" width="1" height="1" fill="white"/>
+            <rect x="1" y="5" width="1" height="1" fill="white"/>
+            <rect x="3" y="3" width="1" height="1" fill="currentColor"/>
+            <rect x="4" y="4" width="1" height="1" fill="currentColor"/>
+            <rect x="5" y="5" width="2" height="2" fill="currentColor" rx=".1"/>
+            <rect x="4" y="3" width="1" height="1" fill="currentColor"/>
+            <rect x="6" y="3" width="1" height="1" fill="currentColor"/>
+          </svg>
+        </div>
+        <div style="margin-top:12px;font-size:11px;color:var(--text3)">หรือกด Add Friend: <strong style="color:var(--text)">@factorydms</strong></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-line')">ปิด</button>
+      <button class="btn btn-primary" onclick="confirmLine()" style="background:#06b25f"><i data-lucide="check"></i> เชื่อมต่อแล้ว</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   DATA
+═══════════════════════════════════════════════════════════ */
+let notifications = [
+  { id:1, type:'approval', priority:'critical', unread:true,
+    title:'รอการอนุมัติของคุณ — เกินกำหนดแล้ว',
+    body:'SOP-ENG-022 Rev 1 ส่งโดย อนุชา T. รอการอนุมัติจากคุณมาแล้ว 3 วัน เกินกำหนดที่ตกลงไว้',
+    doc:'SOP-ENG-022', time:'10 นาทีที่แล้ว', ts:'2025-05-28 10:32',
+    actions:[{label:'อนุมัติเลย',type:'primary',link:'02-approval.html'},{label:'ดูเอกสาร',type:'ghost',link:'02-approval.html'}],
+    icon:'flame', detail:'อนุชา T. ส่ง SOP-ENG-022 Rev 1 มาตั้งแต่ 24 พ.ค. 68 — ผ่านขั้นตอน Author และ Eng. Lead แล้ว รอ Safety (คุณ) อยู่ กำหนดเดิมคือ 3 วันทำการ เกินมาแล้ว 3 วัน'
+  },
+  { id:2, type:'approval', priority:'warning', unread:true,
+    title:'รอการอนุมัติของคุณ — เหลือ 1 วัน',
+    body:'WI-QC-015 Rev 2 ส่งโดย นภา P. ผ่าน QA Lead แล้ว รออนุมัติจากคุณ เหลือเวลา 1 วัน',
+    doc:'WI-QC-015', time:'1 ชม.ที่แล้ว', ts:'2025-05-28 09:42',
+    actions:[{label:'อนุมัติ',type:'primary',link:'02-approval.html'},{label:'ดูเอกสาร',type:'ghost',link:'02-approval.html'}],
+    icon:'clock', detail:'WI-QC-015 Rev 2 รอการอนุมัติขั้นตอน ผจก. QA กำหนดส่งคืน 29 พ.ค. 68 เหลือเวลา 1 วันทำการ'
+  },
+  { id:3, type:'expiry', priority:'warning', unread:true,
+    title:'เอกสารใกล้ถึง Review Cycle',
+    body:'FM-LOG-003 ครบกำหนด review cycle วันที่ 28 มิ.ย. 68 เหลือ 28 วัน กรุณาเตรียมการ review',
+    doc:'FM-LOG-003', time:'เมื่อวาน 08:00', ts:'2025-05-27 08:00',
+    actions:[{label:'ดูเอกสาร',type:'ghost',link:'01-document-store.html'},{label:'สร้าง Revision',type:'primary',link:'01-document-store.html'}],
+    icon:'calendar', detail:'FM-LOG-003 Rev 2 มี review cycle ทุก 1 ปี กำหนดครบ 28 มิ.ย. 68 ผู้รับผิดชอบ: พิมพ์ W.'
+  },
+  { id:4, type:'approval', priority:'info', unread:false,
+    title:'เอกสารได้รับการอนุมัติแล้ว',
+    body:'WI-PRD-042 Rev 3 ได้รับการอนุมัติจากทุกขั้นตอนแล้ว สถานะเปลี่ยนเป็น Active',
+    doc:'WI-PRD-042', time:'28 พ.ค. 68 10:42', ts:'2025-05-28 10:42',
+    actions:[{label:'ดูเอกสาร',type:'ghost',link:'01-document-store.html'}],
+    icon:'circle-check', detail:'WI-PRD-042 Rev 3 ผ่านการอนุมัติครบทุกขั้นตอน (Author → QA Lead → ผจก. QA → Director) เอกสารพร้อมใช้งานแล้ว'
+  },
+  { id:5, type:'approval', priority:'warning', unread:false,
+    title:'เอกสารถูกส่งกลับแก้ไข',
+    body:'SOP-QC-008 Rev 1 ถูกส่งกลับโดย นภา P. เหตุผล: ข้อมูล Spec ไม่ครบถ้วน กรุณาแก้ไขและส่งใหม่',
+    doc:'SOP-QC-008', time:'27 พ.ค. 68 16:05', ts:'2025-05-27 16:05',
+    actions:[{label:'ดูความเห็น',type:'ghost',link:'02-approval.html'},{label:'แก้ไขเอกสาร',type:'primary',link:'01-document-store.html'}],
+    icon:'corner-up-left', detail:'นภา P. ส่งกลับ SOP-QC-008 Rev 1 พร้อมความเห็น: "กรุณาระบุ dissolution limit ที่ชัดเจนใน section 4 และเพิ่ม reference method USP <711>"'
+  },
+  { id:6, type:'system', priority:'info', unread:false,
+    title:'มีคนดาวน์โหลดเอกสารของคุณ',
+    body:'อนุชา T. ดาวน์โหลด SOP-PRD-001 Rev 5 เมื่อ 27 พ.ค. 68 14:22 จาก IP 10.0.0.12',
+    doc:'SOP-PRD-001', time:'27 พ.ค. 68 14:22', ts:'2025-05-27 14:22',
+    actions:[{label:'ดู Audit Log',type:'ghost',link:'04-audit-log.html'}],
+    icon:'download', detail:'Audit trail: อนุชา T. (EMP-0078) ดาวน์โหลด SOP-PRD-001 Rev 5 จาก IP 10.0.0.12 (Engineering Zone) บันทึกใน Audit Log #241'
+  },
+  { id:7, type:'approval', priority:'info', unread:false,
+    title:'Workflow เริ่มต้นสำหรับเอกสารของคุณ',
+    body:'WI-PRD-055 Rev 1 ที่คุณส่ง เข้าสู่ขั้นตอน QA Lead แล้ว รอการตรวจสอบ',
+    doc:'WI-PRD-055', time:'28 พ.ค. 68 08:30', ts:'2025-05-28 08:30',
+    actions:[{label:'ติดตามสถานะ',type:'ghost',link:'02-approval.html'}],
+    icon:'send', detail:'WI-PRD-055 Rev 1 เข้าสู่ Approval Workflow: Standard (Author → QA Lead → ผจก. → Director) ขณะนี้อยู่ที่ขั้นตอน QA Lead'
+  },
+  { id:8, type:'expiry', priority:'info', unread:false,
+    title:'แจ้งเตือน: เอกสาร Obsolete ที่ยังไม่ Archive',
+    body:'SOP-ENG-007 Rev 1 ถูกตั้งเป็น Obsolete แล้ว 8 วัน กรุณา Archive หรือลบออกจากระบบ',
+    doc:'SOP-ENG-007', time:'28 พ.ค. 68 07:00', ts:'2025-05-28 07:00',
+    actions:[{label:'Archive',type:'primary',link:'01-document-store.html'},{label:'ดูเอกสาร',type:'ghost',link:'01-document-store.html'}],
+    icon:'archive', detail:'SOP-ENG-007 Rev 1 ถูกตั้งเป็น Obsolete เมื่อ 20 พ.ค. 68 เกิน retention policy 7 วันแล้ว กรุณา Archive ภายใน 7 วัน'
+  },
+  { id:9, type:'mention', priority:'info', unread:false,
+    title:'มีคนกล่าวถึงคุณใน Comment',
+    body:'วิภา S. กล่าวถึง @สมชาย K. ใน WI-QC-015 Rev 2: "กรุณาตรวจสอบขั้นตอนใน section 3 ด้วย"',
+    doc:'WI-QC-015', time:'27 พ.ค. 68 11:20', ts:'2025-05-27 11:20',
+    actions:[{label:'ดู Comment',type:'ghost',link:'01-document-store.html'}],
+    icon:'at-sign', detail:'วิภา S. กล่าวถึงคุณในหน้า Review ของ WI-QC-015 Rev 2 กรุณาตอบกลับหรือดำเนินการตามที่ร้องขอ'
+  },
+  { id:10, type:'system', priority:'neutral', unread:false,
+    title:'สรุปประจำวัน — 27 พ.ค. 68',
+    body:'วานนี้: อนุมัติ 2 รายการ, ส่งกลับ 1 รายการ, เอกสารใหม่ 3 รายการ, ดาวน์โหลด 4 ครั้ง',
+    doc:'—', time:'27 พ.ค. 68 18:00', ts:'2025-05-27 18:00',
+    actions:[{label:'ดู Dashboard',type:'ghost',link:'00-dashboard.html'}],
+    icon:'bar-chart-2', detail:'สรุปกิจกรรมประจำวัน 27 พ.ค. 68:\n• อนุมัติ: FM-QA-021 Rev 8, FM-WH-003 Rev 4\n• ส่งกลับ: SOP-QC-008 Rev 1\n• สร้างใหม่: SOP-QC-008, WI-PRD-055\n• ดาวน์โหลด: 4 ครั้งโดย 2 ผู้ใช้'
+  },
+];
+
+const TRIGGERS = [
+  { id:'t1', name:'รออนุมัติจากฉัน', desc:'มีเอกสารที่รอการอนุมัติในขั้นตอนของคุณ', inapp:true, email:true, line:false, sms:false, delay:'ทันที', priority:'warning' },
+  { id:'t2', name:'เอกสารเกินกำหนด Approve', desc:'เอกสารที่รอการอนุมัติเกินกำหนดที่ตั้งไว้', inapp:true, email:true, line:true,  sms:true,  delay:'ทันที', priority:'critical' },
+  { id:'t3', name:'เอกสารได้รับการอนุมัติ', desc:'เอกสารที่คุณส่งได้รับการอนุมัติแล้ว', inapp:true, email:true, line:false, sms:false, delay:'ทันที', priority:'info' },
+  { id:'t4', name:'เอกสารถูกส่งกลับแก้ไข', desc:'เอกสารที่คุณส่งถูก Reject กลับมา', inapp:true, email:true, line:false, sms:false, delay:'ทันที', priority:'warning' },
+  { id:'t5', name:'เอกสารใกล้หมดอายุ Review', desc:'เอกสารใกล้ครบ review cycle ภายใน 30 วัน', inapp:true, email:true, line:false, sms:false, delay:'วันละครั้ง', priority:'info' },
+  { id:'t6', name:'Revision ใหม่ถูกสร้าง', desc:'มีการสร้าง revision ใหม่สำหรับเอกสารที่คุณดูแล', inapp:true, email:false, line:false, sms:false, delay:'ทันที', priority:'info' },
+  { id:'t7', name:'มีการดาวน์โหลดเอกสาร', desc:'มีคนดาวน์โหลดเอกสารที่คุณเป็นเจ้าของ', inapp:true, email:false, line:false, sms:false, delay:'ทันที', priority:'neutral' },
+  { id:'t8', name:'มีคน Mention คุณ', desc:'มีคนกล่าวถึง @คุณ ใน comment หรือ review', inapp:true, email:true, line:false, sms:false, delay:'ทันที', priority:'info' },
+  { id:'t9', name:'เอกสารถูกตั้งเป็น Obsolete', desc:'เอกสารในความดูแลถูกตั้งเป็น Obsolete', inapp:true, email:true, line:false, sms:false, delay:'ทันที', priority:'info' },
+  { id:'t10', name:'สรุปกิจกรรมประจำวัน', desc:'Email digest สรุปทุก action ของวัน', inapp:false, email:true, line:false, sms:false, delay:'วันละครั้ง 18:00', priority:'neutral' },
+];
+
+/* ═══════════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════════ */
+let activeTab = 'all';
+let searchQ = '';
+let filterType = '';
+let openTriggers = new Set();
+
+/* ═══════════════════════════════════════════════════════════
+   SIDEBAR / MODAL
+═══════════════════════════════════════════════════════════ */
+function toggleSidebar(){ document.getElementById('sidebar').classList.toggle('collapsed'); }
+function openModal(id){ document.getElementById(id).classList.add('open'); lucide.createIcons(); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m =>
+  m.addEventListener('click', function(e){ if(e.target===this) this.classList.remove('open'); }));
+
+/* ═══════════════════════════════════════════════════════════
+   INBOX RENDER
+═══════════════════════════════════════════════════════════ */
+const PRIORITY_ICON_BG = {
+  critical: 'p-critical', warning: 'p-warning',
+  info: 'p-info', success: 'p-success', neutral: 'p-neutral',
+};
+const CHANNEL_DOTS = {
+  inapp:'var(--accent)', email:'var(--green)', line:'#06b25f', sms:'var(--purple)'
+};
+
+function getFiltered(){
+  return notifications.filter(n => {
+    const mTab = activeTab==='all' || (activeTab==='unread'&&n.unread) || (activeTab==='read'&&!n.unread) || (activeTab==='urgent'&&n.priority==='critical');
+    const mQ   = !searchQ || n.title.toLowerCase().includes(searchQ) || n.body.toLowerCase().includes(searchQ) || n.doc.toLowerCase().includes(searchQ);
+    const mType= !filterType || n.type===filterType;
+    return mTab && mQ && mType;
+  });
+}
+
+function renderInbox(){
+  const list = document.getElementById('notif-list');
+  const data = getFiltered();
+  updateCounts();
+
+  if(!data.length){
+    list.innerHTML=`<div class="inbox-empty">
+      <i data-lucide="bell-off" style="width:40px;height:40px;display:block;margin:0 auto 12px;color:var(--bg4)"></i>
+      <div style="font-size:14px;font-weight:600;color:var(--text2);margin-bottom:4px">ไม่มีการแจ้งเตือน</div>
+      <div style="font-size:12px">ที่ตรงกับเงื่อนไขที่เลือก</div>
+    </div>`;
+    lucide.createIcons(); return;
+  }
+
+  list.innerHTML = data.map(n => `
+    <div class="notif-item${n.unread?' unread':''}" id="notif-${n.id}" onclick="openNotif(${n.id})">
+      ${n.unread?'<div class="unread-dot"></div>':'<div style="width:8px;flex-shrink:0"></div>'}
+      <div class="notif-icon ${PRIORITY_ICON_BG[n.priority]||'p-neutral'}">
+        <i data-lucide="${n.icon}"></i>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div class="notif-title${n.unread?' unread-text':''}">${n.title}</div>
+        <div class="notif-body">${n.body}</div>
+        <div class="notif-meta">
+          ${n.doc!=='—'?`<span style="font-family:var(--mono);font-size:10px">${n.doc}</span><span>·</span>`:''}
+          <span>${n.time}</span>
+          <span>·</span>
+          <span class="badge ${n.priority==='critical'?'badge-red':n.priority==='warning'?'badge-amber':n.priority==='success'?'badge-green':'badge-gray'}" style="font-size:9px">
+            ${n.type==='approval'?'Approval':n.type==='expiry'?'หมดอายุ':n.type==='mention'?'Mention':'System'}
+          </span>
+        </div>
+        <div class="notif-actions" onclick="event.stopPropagation()">
+          ${n.actions.map(a=>`<button class="btn btn-${a.type} btn-xs" onclick="location.href='${a.link}'">${a.label}</button>`).join('')}
+          ${n.unread?`<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();markRead(${n.id})"><i data-lucide="check" style="width:11px;height:11px"></i> อ่านแล้ว</button>`:''}
+          <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();deleteNotif(${n.id})" style="color:var(--text3)"><i data-lucide="x" style="width:11px;height:11px"></i></button>
+        </div>
+      </div>
+    </div>`).join('');
+  lucide.createIcons();
+}
+
+function updateCounts(){
+  const all=notifications.length, unread=notifications.filter(n=>n.unread).length,
+        urgent=notifications.filter(n=>n.priority==='critical').length, read=all-unread;
+  document.getElementById('cnt-all').textContent=all;
+  document.getElementById('cnt-unread').textContent=unread;
+  document.getElementById('cnt-urgent').textContent=urgent;
+  document.getElementById('cnt-read').textContent=read;
+  document.getElementById('st-unread').textContent=unread;
+  document.getElementById('st-today').textContent=notifications.filter(n=>n.ts.startsWith('2025-05-28')).length;
+  document.getElementById('st-urgent').textContent=urgent;
+  document.getElementById('sidebar-badge').textContent=unread;
+}
+
+function switchTab(tab, btn){
+  activeTab=tab;
+  document.querySelectorAll('.inbox-tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  renderInbox();
+}
+function filterInbox(q){ searchQ=q.toLowerCase(); renderInbox(); }
+function filterByType(v){ filterType=v; renderInbox(); }
+
+/* ═══════════════════════════════════════════════════════════
+   NOTIFICATION ACTIONS
+═══════════════════════════════════════════════════════════ */
+function markRead(id){
+  const n=notifications.find(x=>x.id===id);
+  if(n) n.unread=false;
+  renderInbox();
+}
+function deleteNotif(id){
+  notifications=notifications.filter(x=>x.id!==id);
+  renderInbox();
+  showToast('ลบการแจ้งเตือนแล้ว','info');
+}
+function markAllRead(){
+  notifications.forEach(n=>n.unread=false);
+  renderInbox();
+  showToast('อ่านทั้งหมดแล้ว','success');
+}
+function bulkMarkRead(){
+  notifications.forEach(n=>n.unread=false);
+  clearBulk(); renderInbox();
+  showToast('ทำเครื่องหมายว่าอ่านแล้วทั้งหมด','success');
+}
+function bulkDelete(){
+  notifications=[];
+  clearBulk(); renderInbox();
+  showToast('ลบการแจ้งเตือนแล้ว','info');
+}
+function clearBulk(){
+  document.getElementById('bulk-bar').classList.remove('visible');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   OPEN NOTIFICATION DETAIL
+═══════════════════════════════════════════════════════════ */
+function openNotif(id){
+  const n=notifications.find(x=>x.id===id); if(!n)return;
+  if(n.unread){ n.unread=false; renderInbox(); }
+  const pBg={critical:'rgba(220,38,38,.1)',warning:'rgba(180,83,9,.1)',info:'rgba(37,99,235,.1)',success:'rgba(22,163,74,.1)',neutral:'var(--bg4)'};
+  const pColor={critical:'var(--red)',warning:'var(--amber)',info:'var(--accent)',success:'var(--green)',neutral:'var(--text3)'};
+  document.getElementById('modal-notif-title').innerHTML=`
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="width:32px;height:32px;border-radius:8px;background:${pBg[n.priority]};color:${pColor[n.priority]};display:flex;align-items:center;justify-content:center;font-size:14px">
+        <i data-lucide="${n.icon}"></i>
+      </div>
+      <span style="font-size:14px">${n.title}</span>
+    </div>`;
+  document.getElementById('modal-notif-body').innerHTML=`
+    <div style="margin-bottom:12px;padding:10px 12px;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border);font-size:13px;color:var(--text2);line-height:1.6">${n.detail.replace(/\n/g,'<br>')}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+      <div class="meta-item"><div class="meta-key">เอกสาร</div><div class="meta-val" style="font-family:var(--mono);font-size:11px">${n.doc}</div></div>
+      <div class="meta-item"><div class="meta-key">เวลา</div><div class="meta-val" style="font-size:11px">${n.ts}</div></div>
+      <div class="meta-item"><div class="meta-key">ประเภท</div><div class="meta-val"><span class="badge badge-gray" style="font-size:10px">${n.type}</span></div></div>
+      <div class="meta-item"><div class="meta-key">ความสำคัญ</div><div class="meta-val"><span class="badge ${n.priority==='critical'?'badge-red':n.priority==='warning'?'badge-amber':'badge-blue'}" style="font-size:10px">${n.priority}</span></div></div>
+    </div>`;
+  document.getElementById('modal-notif-footer').innerHTML=`
+    <button class="btn btn-ghost" onclick="closeModal('modal-notif')">ปิด</button>
+    ${n.actions.map(a=>`<button class="btn btn-${a.type}" onclick="closeModal('modal-notif');location.href='${a.link}'">${a.label}</button>`).join('')}`;
+  openModal('modal-notif');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TRIGGER SETTINGS RENDER
+═══════════════════════════════════════════════════════════ */
+function renderTriggers(){
+  const el=document.getElementById('trigger-list');
+  el.innerHTML=TRIGGERS.map(t=>{
+    const dots=['inapp','email','line','sms'].map(ch=>
+      `<div class="trigger-dot" style="background:${t[ch]?CHANNEL_DOTS[ch]:'var(--bg4)'}"></div>`).join('');
+    const pBg={critical:'rgba(220,38,38,.1)',warning:'rgba(180,83,9,.1)',info:'rgba(37,99,235,.08)',neutral:'var(--bg4)'};
+    const pColor={critical:'var(--red)',warning:'var(--amber)',info:'var(--accent)',neutral:'var(--text3)'};
+    const isOpen=openTriggers.has(t.id);
+    return `
+    <div class="trigger-row">
+      <div class="trigger-header${isOpen?' open':''}" onclick="toggleTrigger('${t.id}')">
+        <div style="width:6px;height:6px;border-radius:50%;background:${pColor[t.priority]||'var(--text3)'};flex-shrink:0"></div>
+        <span class="trigger-name">${t.name}</span>
+        <div class="trigger-channel-dots">${dots}</div>
+        <i data-lucide="${isOpen?'chevron-up':'chevron-down'}" style="width:13px;height:13px;color:var(--text3);flex-shrink:0"></i>
+      </div>
+      <div class="trigger-detail${isOpen?' open':''}">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${t.desc}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px">
+          ${['inapp','email','line','sms'].map(ch=>`
+          <label class="channel-checkbox">
+            <input type="checkbox" ${t[ch]?'checked':''} onchange="updateTrigger('${t.id}','${ch}',this.checked)" style="accent-color:${CHANNEL_DOTS[ch]}">
+            <div style="width:8px;height:8px;border-radius:50%;background:${CHANNEL_DOTS[ch]}"></div>
+            ${ch==='inapp'?'In-app':ch==='email'?'Email':ch==='line'?'Line OA':'SMS'}
+          </label>`).join('')}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)">
+          <span>หน่วงเวลา:</span>
+          <select class="delay-select" onchange="updateTriggerDelay('${t.id}',this.value)">
+            <option ${t.delay==='ทันที'?'selected':''}>ทันที</option>
+            <option ${t.delay==='5 นาที'?'selected':''}>5 นาที</option>
+            <option ${t.delay==='15 นาที'?'selected':''}>15 นาที</option>
+            <option ${t.delay==='1 ชม.'?'selected':''}>1 ชม.</option>
+            <option ${t.delay==='วันละครั้ง'?'selected':''}>วันละครั้ง</option>
+            <option ${t.delay==='วันละครั้ง 18:00'?'selected':''}>วันละครั้ง 18:00</option>
+          </select>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  lucide.createIcons();
+}
+
+function toggleTrigger(id){
+  if(openTriggers.has(id)) openTriggers.delete(id); else openTriggers.add(id);
+  renderTriggers();
+}
+function updateTrigger(id, ch, val){
+  const t=TRIGGERS.find(x=>x.id===id); if(t) t[ch]=val;
+}
+function updateTriggerDelay(id,val){
+  const t=TRIGGERS.find(x=>x.id===id); if(t) t.delay=val;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CHANNEL ACTIONS
+═══════════════════════════════════════════════════════════ */
+function updateChannelStat(){
+  const toggles=document.querySelectorAll('.channel-row .toggle input');
+  const on=Array.from(toggles).filter(t=>t.checked).length;
+  document.getElementById('st-channels').textContent=on;
+}
+function connectLine(){
+  openModal('modal-line');
+}
+function confirmLine(){
+  closeModal('modal-line');
+  document.getElementById('line-sub').textContent='@somchai.k · เชื่อมต่อแล้ว';
+  document.getElementById('line-sub').style.color='var(--green)';
+  document.getElementById('line-btn').textContent='เชื่อมต่อแล้ว';
+  document.getElementById('line-btn').style.color='var(--green)';
+  document.getElementById('line-btn').disabled=true;
+  showToast('เชื่อมต่อ Line OA สำเร็จ','success');
+  updateChannelStat();
+}
+function sendOTP(){
+  const phone=document.getElementById('sms-phone').value;
+  if(!phone){ showToast('กรุณากรอกเบอร์โทรก่อน','error'); return; }
+  showToast('ส่ง OTP ไปที่ '+phone+' แล้ว','info');
+}
+function confirmSMS(){
+  const otp=document.getElementById('sms-otp').value;
+  if(!otp||otp.length<6){ showToast('กรุณากรอก OTP ให้ครบ 6 หลัก','error'); return; }
+  closeModal('modal-sms');
+  document.getElementById('sms-sub').textContent=document.getElementById('sms-phone').value+' · ยืนยันแล้ว';
+  document.getElementById('sms-sub').style.color='var(--green)';
+  showToast('ตั้งค่า SMS สำเร็จ','success');
+  updateChannelStat();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   QUIET HOURS / SAVE
+═══════════════════════════════════════════════════════════ */
+function toggleQuietHours(){
+  const on=document.getElementById('qh-toggle').checked;
+  document.getElementById('qh-detail').style.display=on?'block':'none';
+}
+function saveSettings(){
+  showToast('บันทึกการตั้งค่าเรียบร้อย','success');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════════════════════ */
+function showToast(msg,type='info'){
+  const wrap=document.getElementById('toast-wrap');
+  const t=document.createElement('div'); t.className='toast '+type;
+  const icons={success:'circle-check',error:'alert-circle',info:'info'};
+  const colors={success:'var(--green)',error:'var(--red)',info:'var(--accent)'};
+  t.innerHTML=`<i data-lucide="${icons[type]}" style="width:16px;height:16px;color:${colors[type]};flex-shrink:0"></i><span>${msg}</span>`;
+  wrap.appendChild(t); lucide.createIcons();
+  setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(20px)';t.style.transition='.2s';setTimeout(()=>t.remove(),200);},3500);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded',()=>{
+  renderInbox();
+  renderTriggers();
+  lucide.createIcons();
+});
+
+// ── Role-aware init ──
+document.addEventListener('DOMContentLoaded', () => {
+  buildSidebar('05-notification');
+  DMS_applyRoleUI();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+});
+</script>
+</body>
+</html>

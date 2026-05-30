@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Factory DMS — Revision Control</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="session.js"></script>
+<script src="sidebar.js"></script>
+<link rel="stylesheet" href="shared.css">
+<style>
+/* ── Layout ── */
+.rev-layout { display:grid; grid-template-columns:300px 1fr; gap:16px; align-items:start; }
+
+/* ── Doc selector panel ── */
+.doc-list-item { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:var(--radius); cursor:pointer; transition:all .15s; border:1px solid transparent; }
+.doc-list-item:hover { background:var(--bg3); }
+.doc-list-item.active { background:var(--accent-dim); border-color:var(--accent-border); }
+.doc-list-item.active .doc-list-code { color:var(--accent); }
+.doc-list-code { font-family:var(--mono); font-size:11px; font-weight:500; color:var(--text3); }
+.doc-list-name { font-size:12px; color:var(--text2); margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px; }
+
+/* ── Timeline ── */
+.timeline-wrap { position:relative; padding-left:28px; }
+.timeline-wrap::before { content:''; position:absolute; left:10px; top:0; bottom:0; width:2px; background:var(--border2); border-radius:2px; }
+.tl-item { position:relative; margin-bottom:12px; }
+.tl-item:last-child { margin-bottom:0; }
+.tl-dot { position:absolute; left:-22px; top:10px; width:14px; height:14px; border-radius:50%; border:2px solid var(--bg2); box-shadow:0 0 0 2px var(--border2); background:var(--bg4); transition:all .2s; }
+.tl-dot.current { background:var(--accent); box-shadow:0 0 0 3px var(--accent-border); }
+.tl-dot.selected { background:var(--green); box-shadow:0 0 0 3px rgba(22,163,74,.25); }
+.tl-dot.compare { background:var(--amber); box-shadow:0 0 0 3px rgba(180,83,9,.25); }
+.tl-card { background:var(--bg2); border:1.5px solid var(--border); border-radius:var(--radius-lg); padding:12px 14px; cursor:pointer; transition:all .15s; }
+.tl-card:hover { border-color:var(--border2); box-shadow:var(--shadow); }
+.tl-card.selected { border-color:var(--green); background:rgba(22,163,74,.04); }
+.tl-card.compare { border-color:var(--amber); background:rgba(180,83,9,.04); }
+.tl-card.current-active { border-color:var(--accent); }
+.tl-rev { font-family:var(--mono); font-size:13px; font-weight:600; }
+.tl-date { font-size:11px; color:var(--text3); }
+.tl-note { font-size:12px; color:var(--text2); margin-top:4px; line-height:1.5; }
+.tl-actions { display:flex; gap:5px; margin-top:8px; flex-wrap:wrap; }
+
+/* ── Diff view ── */
+.diff-header { display:grid; grid-template-columns:1fr 1fr; gap:0; border-radius:var(--radius-lg) var(--radius-lg) 0 0; overflow:hidden; border:1px solid var(--border2); border-bottom:none; }
+.diff-col-header { padding:10px 14px; font-size:12px; font-weight:700; display:flex; align-items:center; gap:7px; }
+.diff-col-header.left { background:rgba(22,163,74,.07); border-right:1px solid var(--border2); color:var(--green); }
+.diff-col-header.right { background:rgba(180,83,9,.07); color:var(--amber); }
+.diff-body { border:1px solid var(--border2); border-radius:0 0 var(--radius-lg) var(--radius-lg); overflow:hidden; font-family:var(--mono); font-size:12px; line-height:1.7; }
+.diff-row { display:grid; grid-template-columns:1fr 1fr; }
+.diff-row:not(:last-child) { border-bottom:1px solid var(--border); }
+.diff-cell { padding:3px 10px; min-height:28px; display:flex; align-items:flex-start; gap:6px; }
+.diff-cell.left { border-right:1px solid var(--border); }
+.diff-cell.added { background:rgba(22,163,74,.08); }
+.diff-cell.removed { background:rgba(220,38,38,.07); }
+.diff-cell.changed { background:rgba(180,83,9,.07); }
+.diff-cell.same { background:transparent; }
+.diff-cell.empty { background:var(--bg3); }
+.diff-linenum { font-size:10px; color:var(--text3); min-width:22px; text-align:right; flex-shrink:0; padding-top:1px; user-select:none; }
+.diff-text { color:var(--text); flex:1; white-space:pre-wrap; word-break:break-all; }
+.diff-text.added-text { color:var(--green); }
+.diff-text.removed-text { color:var(--red); text-decoration:line-through; opacity:.7; }
+.diff-text.changed-text { color:var(--amber); }
+.diff-mark { font-size:10px; font-weight:700; flex-shrink:0; padding-top:2px; }
+.diff-placeholder { text-align:center; padding:48px 20px; color:var(--text3); }
+
+/* ── Stat strip ── */
+.diff-stats { display:flex; gap:14px; padding:8px 14px; background:var(--bg3); border:1px solid var(--border2); border-radius:var(--radius); font-size:11px; flex-wrap:wrap; margin-bottom:10px; align-items:center; }
+.diff-stat { display:flex; align-items:center; gap:5px; }
+.diff-stat-dot { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
+
+/* ── Restore modal ── */
+.restore-impact { background:var(--amber-dim); border:1px solid rgba(180,83,9,.2); border-radius:var(--radius); padding:11px 13px; font-size:12px; margin-bottom:14px; }
+.restore-checklist .chk-item { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border); font-size:13px; }
+.restore-checklist .chk-item:last-child { border-bottom:none; }
+
+/* ── Inline word diff highlight ── */
+.word-del { background:rgba(220,38,38,.15); color:var(--red); border-radius:2px; padding:0 2px; text-decoration:line-through; }
+.word-add { background:rgba(22,163,74,.15); color:var(--green); border-radius:2px; padding:0 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="btn btn-ghost btn-sm" onclick="toggleSidebar()" style="padding:5px 8px"><i data-lucide="menu"></i></button>
+      <span id="topbar-role" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;margin-right:4px"></span><div class="page-title">Revision Control <span class="page-sub">ประวัติและเปรียบเทียบเอกสาร</span></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-ghost btn-sm"><i data-lucide="search"></i></button>
+        <button class="btn btn-ghost btn-sm" style="position:relative" onclick="location.href='02-approval.html'">
+          <i data-lucide="bell"></i>
+          <span style="position:absolute;top:4px;right:4px;width:6px;height:6px;background:var(--red);border-radius:50%"></span>
+        </button>
+        <div class="divider"></div>
+        <div class="avatar" style="cursor:pointer" onclick="location.href='00-login.html'">SK</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="rev-layout">
+
+        <!-- LEFT: Document selector -->
+        <div>
+          <div class="card" style="padding:0;overflow:hidden">
+            <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+              <i data-lucide="files" style="width:15px;height:15px;color:var(--accent)"></i>
+              <span style="font-size:13px;font-weight:700">เลือกเอกสาร</span>
+            </div>
+            <!-- Search within doc list -->
+            <div style="padding:10px 12px;border-bottom:1px solid var(--border)">
+              <div class="search-box" style="padding:6px 10px">
+                <i data-lucide="search" style="width:13px;height:13px;color:var(--text3)"></i>
+                <input type="text" placeholder="ค้นหารหัส / ชื่อ..." oninput="filterDocList(this.value)" style="font-size:12px">
+              </div>
+            </div>
+            <div style="max-height:480px;overflow-y:auto;padding:8px" id="doc-list"></div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Timeline + Diff -->
+        <div>
+          <!-- Doc header (shown when selected) -->
+          <div id="doc-header" style="display:none;margin-bottom:14px">
+            <div class="card" style="padding:14px 16px">
+              <div style="display:flex;align-items:center;gap:12px">
+                <div style="width:40px;height:40px;border-radius:9px;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">
+                  <i data-lucide="file-text" id="doc-hdr-icon"></i>
+                </div>
+                <div style="flex:1">
+                  <div style="font-size:15px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px">
+                    <span id="doc-hdr-code">—</span>
+                    <span id="doc-hdr-status"></span>
+                    <span id="doc-hdr-revcount" style="font-size:11px;color:var(--text3);font-weight:400"></span>
+                  </div>
+                  <div style="font-size:12px;color:var(--text3);margin-top:2px" id="doc-hdr-name">—</div>
+                </div>
+                <div style="display:flex;gap:6px">
+                  <button class="btn btn-ghost btn-sm" onclick="showToast('ดาวน์โหลด Rev ปัจจุบัน','info')"><i data-lucide="download"></i> ดาวน์โหลด</button>
+                  <button class="btn btn-primary btn-sm" onclick="location.href='01-document-store.html'"><i data-lucide="git-branch"></i> สร้าง Revision</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Compare controls -->
+          <div id="compare-bar" style="display:none;margin-bottom:12px">
+            <div class="card" style="padding:10px 14px">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <span style="font-size:12px;font-weight:700;color:var(--text3)">เปรียบเทียบ:</span>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="width:10px;height:10px;border-radius:2px;background:var(--green);display:inline-block"></span>
+                  <span style="font-size:12px" id="compare-left-label">—</span>
+                </div>
+                <i data-lucide="arrow-right" style="width:14px;height:14px;color:var(--text3)"></i>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="width:10px;height:10px;border-radius:2px;background:var(--amber);display:inline-block"></span>
+                  <span style="font-size:12px" id="compare-right-label">—</span>
+                </div>
+                <div style="margin-left:auto;display:flex;gap:6px">
+                  <button class="btn btn-ghost btn-sm" onclick="swapCompare()"><i data-lucide="arrow-left-right"></i> สลับ</button>
+                  <button class="btn btn-ghost btn-sm" onclick="clearCompare()"><i data-lucide="x"></i> ล้าง</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Timeline -->
+          <div id="timeline-section" style="display:none">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+              <div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px">
+                <i data-lucide="git-branch" style="width:15px;height:15px;color:var(--accent)"></i>
+                Revision Timeline
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:11px;color:var(--text3)">เลือก 2 revision เพื่อเปรียบเทียบ</span>
+                <div style="display:flex;gap:4px;font-size:10px">
+                  <span style="padding:2px 7px;border-radius:99px;background:rgba(22,163,74,.1);color:var(--green);border:1px solid rgba(22,163,74,.2)">● ก่อน</span>
+                  <span style="padding:2px 7px;border-radius:99px;background:rgba(180,83,9,.1);color:var(--amber);border:1px solid rgba(180,83,9,.2)">● หลัง</span>
+                </div>
+              </div>
+            </div>
+            <div class="timeline-wrap" id="timeline-list"></div>
+          </div>
+
+          <!-- Diff view -->
+          <div id="diff-section" style="display:none;margin-top:16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+              <div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px">
+                <i data-lucide="diff" style="width:15px;height:15px;color:var(--accent)"></i>
+                Diff View
+              </div>
+              <div style="display:flex;gap:5px">
+                <button class="btn btn-ghost btn-sm" onclick="toggleWordDiff()" id="word-diff-btn"><i data-lucide="type"></i> Word diff</button>
+                <button class="btn btn-ghost btn-sm" onclick="showToast('Export diff เป็น PDF — coming soon','info')"><i data-lucide="download"></i> Export</button>
+              </div>
+            </div>
+            <div class="diff-stats" id="diff-stats"></div>
+            <div class="diff-header">
+              <div class="diff-col-header left">
+                <i data-lucide="git-commit-horizontal" style="width:14px;height:14px"></i>
+                <span id="diff-left-title">—</span>
+                <span class="badge badge-green" style="font-size:9px;margin-left:auto" id="diff-left-badge">ก่อน</span>
+              </div>
+              <div class="diff-col-header right">
+                <i data-lucide="git-commit-horizontal" style="width:14px;height:14px"></i>
+                <span id="diff-right-title">—</span>
+                <span class="badge badge-amber" style="font-size:9px;margin-left:auto" id="diff-right-badge">หลัง</span>
+              </div>
+            </div>
+            <div class="diff-body" id="diff-body"></div>
+          </div>
+
+          <!-- Empty state -->
+          <div id="empty-state" class="card" style="text-align:center;padding:56px 20px;color:var(--text3)">
+            <i data-lucide="git-branch" style="width:48px;height:48px;display:block;margin:0 auto 14px;color:var(--bg4)"></i>
+            <div style="font-size:15px;font-weight:600;color:var(--text2);margin-bottom:5px">เลือกเอกสารจากรายการทางซ้าย</div>
+            <div style="font-size:13px">เพื่อดู revision history และเปรียบเทียบการเปลี่ยนแปลง</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- RESTORE MODAL -->
+<div class="modal-overlay" id="modal-restore">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <div class="modal-title"><i data-lucide="rotate-ccw" style="color:var(--amber)"></i> Restore Revision เก่า</div>
+      <button class="modal-close" onclick="closeModal('modal-restore')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="restore-impact">
+        <div style="display:flex;align-items:center;gap:7px;font-weight:700;color:var(--amber);margin-bottom:6px">
+          <i data-lucide="triangle-alert" style="width:15px;height:15px"></i> ข้อควรระวัง
+        </div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.6">
+          การ Restore จะสร้าง <strong>Revision ใหม่</strong> โดยมีเนื้อหาเหมือน <span id="restore-rev-label" style="font-family:var(--mono);font-weight:700;color:var(--amber)">Rev ?</span> — Revision ปัจจุบันจะถูก supersede แต่ไม่ถูกลบ ยังค้นหาได้ใน history
+        </div>
+      </div>
+
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">ข้อมูล Revision ที่จะ Restore</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="meta-item"><div class="meta-key">Revision</div><div class="meta-val" style="font-family:var(--mono);font-size:12px" id="restore-rev-num">—</div></div>
+          <div class="meta-item"><div class="meta-key">วันที่สร้าง</div><div class="meta-val" style="font-size:12px" id="restore-rev-date">—</div></div>
+          <div class="meta-item"><div class="meta-key">ผู้แก้ไข</div><div class="meta-val" style="font-size:12px" id="restore-rev-by">—</div></div>
+          <div class="meta-item"><div class="meta-key">สถานะเดิม</div><div class="meta-val" style="font-size:12px" id="restore-rev-status">—</div></div>
+        </div>
+        <div style="margin-top:8px;background:var(--bg3);border-radius:var(--radius);padding:9px 11px;font-size:12px;color:var(--text2);border:1px solid var(--border)">
+          <span style="font-weight:700;color:var(--text3);font-size:10px;text-transform:uppercase">Change Note เดิม: </span><span id="restore-rev-note">—</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Revision ใหม่ที่จะสร้าง</label>
+        <input class="form-input" id="restore-new-rev" value="Rev ?" style="font-family:var(--mono)" readonly>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">เหตุผลในการ Restore *</label>
+        <textarea class="form-input form-textarea" id="restore-reason" placeholder="ระบุเหตุผลที่ต้องการย้อนกลับไปใช้ revision เก่า เช่น Rev ใหม่พบปัญหาใน production..." style="min-height:75px"></textarea>
+      </div>
+
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Approval Workflow สำหรับ Revision ที่ Restore</label>
+        <select class="form-input">
+          <option>Standard: Author → QA → Manager → Director</option>
+          <option>Fast-track: Author → QA Manager</option>
+          <option>Emergency: Author → Director (เร่งด่วน)</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-restore')">ยกเลิก</button>
+      <button class="btn btn-danger" onclick="confirmRestore()"><i data-lucide="rotate-ccw"></i> Restore และส่งขออนุมัติ</button>
+    </div>
+  </div>
+</div>
+
+<!-- REVISION DETAIL MODAL -->
+<div class="modal-overlay" id="modal-rev-detail">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title"><i data-lucide="git-commit-horizontal" style="color:var(--accent)"></i> รายละเอียด Revision</div>
+      <button class="modal-close" onclick="closeModal('modal-rev-detail')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px" id="rev-detail-meta"></div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Change Note</div>
+        <div style="background:var(--bg3);border-radius:var(--radius);padding:10px 12px;font-size:13px;color:var(--text2);border:1px solid var(--border);line-height:1.6" id="rev-detail-note">—</div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Approval History</div>
+        <div id="rev-detail-approvals"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-rev-detail')">ปิด</button>
+      <button class="btn btn-ghost" onclick="showToast('ดาวน์โหลด revision นี้','info')"><i data-lucide="download"></i> ดาวน์โหลด</button>
+      <button class="btn btn-danger btn-sm" id="rev-detail-restore-btn" onclick="openRestoreFromDetail()"><i data-lucide="rotate-ccw"></i> Restore revision นี้</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script>
+/* ═══════════════════════════════════
+   DATA — Documents with full revision history + diff content
+══════════════════════════════════ */
+const documents = [
+  {
+    id:1, code:'SOP-PRD-001', name:'ขั้นตอนการผลิตเม็ดยา Paracetamol 500mg',
+    cat:'SOP', dept:'Production', currentRev:'Rev 5', status:'Active',
+    revs:[
+      { n:'Rev 5', date:'28 พ.ค. 68', by:'สมชาย K.', status:'Active',
+        note:'เพิ่มขั้นตอน Granulation ใหม่ตาม SOP-EQ-012 และปรับ IPC frequency จาก 2 ชม. เป็น 1 ชม.',
+        changeType:'Major',
+        approvals:[{step:'Author',by:'สมชาย K.',date:'26 พ.ค. 68 09:00',action:'Submitted'},{step:'QA Lead',by:'วิภา S.',date:'27 พ.ค. 68 10:15',action:'Approved'},{step:'ผจก. QA',by:'นภา P.',date:'27 พ.ค. 68 14:30',action:'Approved'},{step:'Director',by:'ผู้อำนวยการ',date:'28 พ.ค. 68 14:22',action:'Approved'}],
+        content:[
+          '1. วัตถุประสงค์',
+          'เพื่อกำหนดขั้นตอนการผลิตเม็ดยา Paracetamol 500mg ให้เป็นมาตรฐาน',
+          '2. ขอบเขต',
+          'ครอบคลุมกระบวนการตั้งแต่ชั่งวัตถุดิบจนถึงบรรจุภัณฑ์',
+          '3. ขั้นตอน Granulation',
+          '3.1 เตรียม binder solution 5% PVP K30 ใน purified water',
+          '3.2 ผสม API กับ excipients ใน high shear granulator 15 นาที',
+          '3.3 เพิ่ม binder solution ช้าๆ ระหว่าง granulation (เพิ่มใหม่)',
+          '3.4 Wet granulate จนได้ endpoint ตาม ampere reading',
+          '4. IPC Frequency',
+          '4.1 ตรวจ Hardness และ Thickness ทุก 1 ชม. (ปรับจาก 2 ชม.)',
+          '4.2 บันทึกผลลง Batch Record FM-QA-021',
+        ]
+      },
+      { n:'Rev 4', date:'15 มี.ค. 68', by:'นภา P.', status:'Superseded',
+        note:'แก้ค่า temperature spec ตาม ICH Q10 guidance และเพิ่ม in-process check',
+        changeType:'Major',
+        approvals:[{step:'Author',by:'นภา P.',date:'13 มี.ค. 68 09:00',action:'Submitted'},{step:'QA Lead',by:'วิภา S.',date:'14 มี.ค. 68 11:00',action:'Approved'},{step:'Director',by:'ผู้อำนวยการ',date:'15 มี.ค. 68 14:00',action:'Approved'}],
+        content:[
+          '1. วัตถุประสงค์',
+          'เพื่อกำหนดขั้นตอนการผลิตเม็ดยา Paracetamol 500mg ให้เป็นมาตรฐาน',
+          '2. ขอบเขต',
+          'ครอบคลุมกระบวนการตั้งแต่ชั่งวัตถุดิบจนถึงบรรจุภัณฑ์',
+          '3. ขั้นตอน Granulation',
+          '3.1 เตรียม binder solution 5% PVP K30 ใน purified water',
+          '3.2 ผสม API กับ excipients ใน high shear granulator 15 นาที',
+          '3.3 Wet granulate จนได้ endpoint ตาม ampere reading',
+          '4. IPC Frequency',
+          '4.1 ตรวจ Hardness และ Thickness ทุก 2 ชม.',
+          '4.2 บันทึกผลลง Batch Record FM-QA-021',
+        ]
+      },
+      { n:'Rev 3', date:'02 ม.ค. 68', by:'วิภา S.', status:'Superseded',
+        note:'เพิ่ม IPC checklist ขั้นตอน compression และปรับ format ตาม template ใหม่',
+        changeType:'Minor',
+        approvals:[{step:'Author',by:'วิภา S.',date:'01 ม.ค. 68',action:'Submitted'},{step:'QA Lead',by:'นภา P.',date:'02 ม.ค. 68',action:'Approved'}],
+        content:[
+          '1. วัตถุประสงค์',
+          'เพื่อกำหนดขั้นตอนการผลิตเม็ดยา Paracetamol 500mg ให้เป็นมาตรฐาน',
+          '2. ขอบเขต',
+          'ครอบคลุมกระบวนการตั้งแต่ชั่งวัตถุดิบจนถึงบรรจุภัณฑ์',
+          '3. ขั้นตอน Granulation',
+          '3.1 เตรียม binder solution 5% PVP K30 ใน purified water',
+          '3.2 ผสม API กับ excipients ใน mixer 15 นาที',
+          '3.3 Wet granulate จนได้ endpoint ตาม ampere reading',
+          '4. IPC Frequency',
+          '4.1 ตรวจ Hardness และ Thickness ทุก 2 ชม.',
+          '4.2 บันทึกผลลง Batch Record',
+        ]
+      },
+      { n:'Rev 2', date:'10 ส.ค. 67', by:'สมชาย K.', status:'Superseded',
+        note:'อัปเดต Raw Material specification ตาม vendor ใหม่',
+        changeType:'Major',
+        approvals:[{step:'Author',by:'สมชาย K.',date:'09 ส.ค. 67',action:'Submitted'},{step:'Director',by:'ผู้อำนวยการ',date:'10 ส.ค. 67',action:'Approved'}],
+        content:[
+          '1. วัตถุประสงค์',
+          'เพื่อกำหนดขั้นตอนการผลิตเม็ดยา Paracetamol 500mg ให้เป็นมาตรฐาน',
+          '2. ขอบเขต',
+          'ครอบคลุมกระบวนการตั้งแต่ชั่งวัตถุดิบจนถึงบรรจุภัณฑ์',
+          '3. ขั้นตอน Granulation',
+          '3.1 เตรียม binder solution 3% HPMC ใน purified water',
+          '3.2 ผสม API กับ excipients ใน mixer 15 นาที',
+          '3.3 Wet granulate จนได้ endpoint ตาม ampere reading',
+          '4. IPC Frequency',
+          '4.1 ตรวจ Hardness ทุก 2 ชม.',
+        ]
+      },
+      { n:'Rev 1', date:'05 ม.ค. 67', by:'สมชาย K.', status:'Superseded',
+        note:'เอกสารฉบับแรก — Initial release',
+        changeType:'Major',
+        approvals:[{step:'Author',by:'สมชาย K.',date:'04 ม.ค. 67',action:'Submitted'},{step:'Director',by:'ผู้อำนวยการ',date:'05 ม.ค. 67',action:'Approved'}],
+        content:[
+          '1. วัตถุประสงค์',
+          'เพื่อกำหนดขั้นตอนการผลิตเม็ดยา Paracetamol 500mg',
+          '2. ขอบเขต',
+          'ครอบคลุมกระบวนการผลิต',
+          '3. ขั้นตอน Granulation',
+          '3.1 เตรียม binder solution 3% HPMC ใน purified water',
+          '3.2 ผสม API กับ excipients ใน mixer 10 นาที',
+          '3.3 Wet granulate',
+          '4. IPC Frequency',
+          '4.1 ตรวจ Hardness ทุก 4 ชม.',
+        ]
+      },
+    ]
+  },
+  {
+    id:2, code:'WI-QC-015', name:'การตรวจสอบคุณภาพ In-process ไลน์ A',
+    cat:'WI', dept:'QA', currentRev:'Rev 2', status:'Pending',
+    revs:[
+      { n:'Rev 2', date:'27 พ.ค. 68', by:'นภา P.', status:'Pending',
+        note:'เพิ่มการตรวจ Hardness ทุก 30 นาที และ Thickness ทุก 1 ชม. รออนุมัติ',
+        changeType:'Major',
+        approvals:[{step:'Author',by:'นภา P.',date:'27 พ.ค. 68 10:30',action:'Submitted'},{step:'QA Lead',by:'รอดำเนินการ',date:'—',action:'Pending'}],
+        content:[
+          '1. วัตถุประสงค์',
+          'กำหนดวิธีการตรวจสอบคุณภาพระหว่างการผลิต (In-process) สำหรับไลน์ A',
+          '2. การตรวจสอบ Hardness',
+          '2.1 ตรวจวัด Hardness ทุก 30 นาที (เพิ่มใหม่ จากเดิม 1 ชม.)',
+          '2.2 ค่ายอมรับ: 80–120 N',
+          '3. การตรวจสอบ Thickness',
+          '3.1 ตรวจวัด Thickness ทุก 1 ชม. (เพิ่มใหม่)',
+          '3.2 ค่ายอมรับ: 4.8–5.2 mm',
+          '4. การบันทึกผล',
+          '4.1 บันทึกลง FM-IPC-001 ทันทีหลังตรวจ',
+        ]
+      },
+      { n:'Rev 1', date:'10 ก.พ. 68', by:'นภา P.', status:'Superseded',
+        note:'เอกสารฉบับแรก — Initial release สำหรับไลน์ A',
+        changeType:'Major',
+        approvals:[{step:'Author',by:'นภา P.',date:'09 ก.พ. 68',action:'Submitted'},{step:'Director',by:'ผู้อำนวยการ',date:'10 ก.พ. 68',action:'Approved'}],
+        content:[
+          '1. วัตถุประสงค์',
+          'กำหนดวิธีการตรวจสอบคุณภาพระหว่างการผลิต (In-process) สำหรับไลน์ A',
+          '2. การตรวจสอบ Hardness',
+          '2.1 ตรวจวัด Hardness ทุก 1 ชม.',
+          '2.2 ค่ายอมรับ: 80–120 N',
+          '3. การบันทึกผล',
+          '3.1 บันทึกลง FM-IPC-001 ทันทีหลังตรวจ',
+        ]
+      },
+    ]
+  },
+  {
+    id:3, code:'FM-QA-021', name:'Batch Record Template — Liquid Oral',
+    cat:'FM', dept:'QA', currentRev:'Rev 8', status:'Active',
+    revs:[
+      { n:'Rev 8', date:'26 พ.ค. 68', by:'วิภา S.', status:'Active', note:'เพิ่ม column pH, Viscosity และ Conductivity ตาม spec ใหม่', changeType:'Minor',
+        approvals:[{step:'Author',by:'วิภา S.',date:'25 พ.ค. 68',action:'Submitted'},{step:'Director',by:'ผู้อำนวยการ',date:'26 พ.ค. 68 16:00',action:'Approved'}],
+        content:['Section A: Batch Information','Product Name: ___________','Batch No: ___________','Mfg. Date: ___________','Section B: In-Process Tests','pH: ___ (Spec: 4.5–5.5)','Viscosity: ___ cP','Conductivity: ___ µS/cm (เพิ่มใหม่)','Section C: Final Release','Appearance: ___________']
+      },
+      { n:'Rev 7', date:'01 เม.ย. 68', by:'วิภา S.', status:'Superseded', note:'แก้ layout signature block และเพิ่ม QA reviewer field', changeType:'Minor',
+        approvals:[{step:'Author',by:'วิภา S.',date:'31 มี.ค. 68',action:'Submitted'},{step:'Director',by:'ผู้อำนวยการ',date:'01 เม.ย. 68',action:'Approved'}],
+        content:['Section A: Batch Information','Product Name: ___________','Batch No: ___________','Mfg. Date: ___________','Section B: In-Process Tests','pH: ___ (Spec: 4.5–5.5)','Viscosity: ___ cP','Section C: Final Release','Appearance: ___________']
+      },
+    ]
+  },
+  {
+    id:4, code:'WI-PRD-042', name:'การตั้งค่าเครื่อง Tablet Press Fette 2090',
+    cat:'WI', dept:'Production', currentRev:'Rev 3', status:'Active',
+    revs:[
+      { n:'Rev 3', date:'28 พ.ค. 68', by:'สมชาย K.', status:'Active', note:'อัปเดต punch clearance spec และเพิ่ม troubleshooting guide', changeType:'Major',
+        approvals:[{step:'Author',by:'สมชาย K.',date:'27 พ.ค. 68',action:'Submitted'},{step:'QA Lead',by:'วิภา S.',date:'28 พ.ค. 68',action:'Approved'}],
+        content:['1. Pre-operation check','1.1 ตรวจสอบความสะอาดเครื่อง','1.2 ตรวจ punch clearance: 0.05–0.10 mm (ปรับ spec จาก 0.08–0.15)','2. Setup parameters','2.1 Turret speed: 30–50 rpm','2.2 Pre-compression force: 2–5 kN','3. Troubleshooting (เพิ่มใหม่)','3.1 เม็ดแตก: ลด compression force 10%','3.2 น้ำหนักไม่ผ่าน: ตรวจ feeder speed']
+      },
+      { n:'Rev 2', date:'14 มี.ค. 68', by:'อนุชา T.', status:'Superseded', note:'เพิ่ม CIP procedure หลังการผลิต', changeType:'Major',
+        approvals:[{step:'Author',by:'อนุชา T.',date:'13 มี.ค. 68',action:'Submitted'},{step:'QA Lead',by:'วิภา S.',date:'14 มี.ค. 68',action:'Approved'}],
+        content:['1. Pre-operation check','1.1 ตรวจสอบความสะอาดเครื่อง','1.2 ตรวจ punch clearance: 0.08–0.15 mm','2. Setup parameters','2.1 Turret speed: 30–50 rpm','2.2 Pre-compression force: 2–5 kN','3. CIP Procedure (เพิ่มใหม่)','3.1 ล้างด้วย purified water 3 รอบ']
+      },
+      { n:'Rev 1', date:'01 ธ.ค. 67', by:'สมชาย K.', status:'Superseded', note:'Initial release', changeType:'Major',
+        approvals:[{step:'Author',by:'สมชาย K.',date:'30 พ.ย. 67',action:'Submitted'},{step:'Director',by:'ผู้อำนวยการ',date:'01 ธ.ค. 67',action:'Approved'}],
+        content:['1. Pre-operation check','1.1 ตรวจสอบความสะอาดเครื่อง','1.2 ตรวจ punch clearance','2. Setup parameters','2.1 Turret speed: 30–50 rpm']
+      },
+    ]
+  },
+];
+
+/* ═══════════════════════════════════
+   STATE
+══════════════════════════════════ */
+let activeDoc = null;
+let selectedRevA = null; // "ก่อน" (green)
+let selectedRevB = null; // "หลัง" (amber)
+let wordDiffMode = false;
+let activeRevDetail = null;
+
+/* ═══════════════════════════════════
+   SIDEBAR + MODAL
+══════════════════════════════════ */
+function toggleSidebar(){ document.getElementById('sidebar').classList.toggle('collapsed'); }
+function openModal(id){ document.getElementById(id).classList.add('open'); lucide.createIcons(); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', function(e){ if(e.target===this) this.classList.remove('open'); }));
+
+/* ═══════════════════════════════════
+   DOC LIST
+══════════════════════════════════ */
+function renderDocList(data){
+  const el = document.getElementById('doc-list');
+  el.innerHTML = data.map(d => `
+    <div class="doc-list-item${activeDoc&&activeDoc.id===d.id?' active':''}" onclick="selectDoc(${d.id})">
+      <div style="width:30px;height:30px;border-radius:7px;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">
+        <i data-lucide="file-text"></i>
+      </div>
+      <div style="min-width:0;flex:1">
+        <div class="doc-list-code">${d.code}</div>
+        <div class="doc-list-name">${d.name}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:10px;font-family:var(--mono);color:var(--text3)">${d.currentRev}</div>
+        <div style="font-size:9px;color:var(--text3)">${d.revs.length} revs</div>
+      </div>
+    </div>`).join('');
+  lucide.createIcons();
+}
+function filterDocList(q){
+  const filtered = documents.filter(d => d.code.toLowerCase().includes(q.toLowerCase()) || d.name.toLowerCase().includes(q.toLowerCase()));
+  renderDocList(filtered);
+}
+
+/* ═══════════════════════════════════
+   SELECT DOC
+══════════════════════════════════ */
+function selectDoc(id){
+  activeDoc = documents.find(d => d.id===id);
+  selectedRevA = null; selectedRevB = null;
+  renderDocList(documents);
+  renderDocHeader();
+  renderTimeline();
+  hideDiff();
+  document.getElementById('compare-bar').style.display='none';
+  document.getElementById('empty-state').style.display='none';
+  document.getElementById('doc-header').style.display='block';
+  document.getElementById('timeline-section').style.display='block';
+  lucide.createIcons();
+}
+function renderDocHeader(){
+  const d = activeDoc;
+  document.getElementById('doc-hdr-code').textContent = d.code;
+  document.getElementById('doc-hdr-name').textContent = d.name;
+  const sb = {Active:'badge-green',Pending:'badge-amber',Draft:'badge-blue'};
+  document.getElementById('doc-hdr-status').innerHTML = `<span class="badge ${sb[d.status]||'badge-gray'}">${d.status}</span>`;
+  document.getElementById('doc-hdr-revcount').textContent = `${d.revs.length} revisions`;
+}
+
+/* ═══════════════════════════════════
+   TIMELINE
+══════════════════════════════════ */
+function renderTimeline(){
+  const el = document.getElementById('timeline-list');
+  const ctMap = {Major:'badge-amber',Minor:'badge-blue',Critical:'badge-red'};
+  el.innerHTML = activeDoc.revs.map((r,i) => {
+    const isCurrent = i===0;
+    const isA = selectedRevA && selectedRevA.n===r.n;
+    const isB = selectedRevB && selectedRevB.n===r.n;
+    let dotClass = isCurrent ? 'current' : '';
+    if(isA) dotClass = 'selected';
+    if(isB) dotClass = 'compare';
+    let cardClass = isCurrent ? 'current-active' : '';
+    if(isA) cardClass = 'selected';
+    if(isB) cardClass = 'compare';
+    const sb = {Active:'badge-green',Pending:'badge-amber',Superseded:'badge-gray',Draft:'badge-blue',Obsolete:'badge-gray'};
+    return `
+    <div class="tl-item">
+      <div class="tl-dot ${dotClass}"></div>
+      <div class="tl-card ${cardClass}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+          <span class="tl-rev">${r.n}</span>
+          ${isCurrent?'<span class="badge badge-green" style="font-size:9px">Current</span>':''}
+          <span class="badge ${sb[r.status]||'badge-gray'}" style="font-size:9px">${r.status}</span>
+          <span class="badge ${ctMap[r.changeType]||'badge-gray'}" style="font-size:9px">${r.changeType||''}</span>
+          ${isA?'<span class="badge" style="background:rgba(22,163,74,.1);color:var(--green);border:1px solid rgba(22,163,74,.2);font-size:9px">● ก่อน</span>':''}
+          ${isB?'<span class="badge" style="background:rgba(180,83,9,.1);color:var(--amber);border:1px solid rgba(180,83,9,.2);font-size:9px">● หลัง</span>':''}
+          <span class="tl-date" style="margin-left:auto">${r.date} · ${r.by}</span>
+        </div>
+        <div class="tl-note">${r.note}</div>
+        <div class="tl-actions">
+          <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();openRevDetail(${activeDoc.id},'${r.n}')"><i data-lucide="info" style="width:12px;height:12px"></i> รายละเอียด</button>
+          <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();selectRevA(${activeDoc.id},'${r.n}')"
+            style="${isA?'background:var(--green-dim);color:var(--green);border-color:rgba(22,163,74,.2)':''}">
+            <i data-lucide="circle" style="width:10px;height:10px;color:var(--green)"></i> เลือกเป็น "ก่อน"</button>
+          <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();selectRevB(${activeDoc.id},'${r.n}')"
+            style="${isB?'background:var(--amber-dim);color:var(--amber);border-color:rgba(180,83,9,.2)':''}">
+            <i data-lucide="circle" style="width:10px;height:10px;color:var(--amber)"></i> เลือกเป็น "หลัง"</button>
+          ${!isCurrent?`<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();openRestore(${activeDoc.id},'${r.n}')"><i data-lucide="rotate-ccw" style="width:12px;height:12px"></i> Restore</button>`:''}
+          <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();showToast('ดาวน์โหลด ${r.n}','info')"><i data-lucide="download" style="width:12px;height:12px"></i></button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  lucide.createIcons();
+}
+
+/* ═══════════════════════════════════
+   SELECT REVISION FOR COMPARE
+══════════════════════════════════ */
+function selectRevA(docId, revN){
+  const rev = activeDoc.revs.find(r=>r.n===revN);
+  if(!rev) return;
+  if(selectedRevB && selectedRevB.n===revN){ showToast('เลือก revision คนละตัวกัน','error'); return; }
+  selectedRevA = rev;
+  renderTimeline();
+  tryShowDiff();
+}
+function selectRevB(docId, revN){
+  const rev = activeDoc.revs.find(r=>r.n===revN);
+  if(!rev) return;
+  if(selectedRevA && selectedRevA.n===revN){ showToast('เลือก revision คนละตัวกัน','error'); return; }
+  selectedRevB = rev;
+  renderTimeline();
+  tryShowDiff();
+}
+function swapCompare(){
+  [selectedRevA, selectedRevB] = [selectedRevB, selectedRevA];
+  renderTimeline();
+  tryShowDiff();
+}
+function clearCompare(){
+  selectedRevA = null; selectedRevB = null;
+  renderTimeline();
+  hideDiff();
+  document.getElementById('compare-bar').style.display='none';
+}
+
+/* ═══════════════════════════════════
+   DIFF ENGINE
+══════════════════════════════════ */
+function tryShowDiff(){
+  if(!selectedRevA || !selectedRevB){ hideDiff(); return; }
+  // Update compare bar
+  document.getElementById('compare-bar').style.display='block';
+  document.getElementById('compare-left-label').textContent = selectedRevA.n+' ('+selectedRevA.date+')';
+  document.getElementById('compare-right-label').textContent = selectedRevB.n+' ('+selectedRevB.date+')';
+  renderDiff(selectedRevA, selectedRevB);
+}
+
+function computeDiff(linesA, linesB){
+  // Simple LCS-based line diff
+  const m=linesA.length, n=linesB.length;
+  const dp=Array.from({length:m+1},()=>new Array(n+1).fill(0));
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++)
+    dp[i][j] = linesA[i-1]===linesB[j-1] ? dp[i-1][j-1]+1 : Math.max(dp[i-1][j],dp[i][j-1]);
+  // Traceback
+  const result=[];
+  let i=m,j=n;
+  while(i>0||j>0){
+    if(i>0&&j>0&&linesA[i-1]===linesB[j-1]){ result.unshift({type:'same',left:linesA[i-1],right:linesB[j-1]}); i--;j--; }
+    else if(j>0&&(i===0||dp[i][j-1]>=dp[i-1][j])){ result.unshift({type:'added',left:null,right:linesB[j-1]}); j--; }
+    else { result.unshift({type:'removed',left:linesA[i-1],right:null}); i--; }
+  }
+  // Merge adjacent removed+added as changed pairs
+  const merged=[];
+  let k=0;
+  while(k<result.length){
+    if(result[k].type==='removed'&&k+1<result.length&&result[k+1].type==='added'){
+      merged.push({type:'changed',left:result[k].left,right:result[k+1].right}); k+=2;
+    } else { merged.push(result[k]); k++; }
+  }
+  return merged;
+}
+
+function wordDiff(a, b){
+  const wa=a.split(/(\s+)/), wb=b.split(/(\s+)/);
+  const m=wa.length,n=wb.length;
+  const dp=Array.from({length:m+1},()=>new Array(n+1).fill(0));
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++)
+    dp[i][j]=wa[i-1]===wb[j-1]?dp[i-1][j-1]+1:Math.max(dp[i-1][j],dp[i][j-1]);
+  let i=m,j=n,left='',right='';
+  const ops=[];
+  while(i>0||j>0){
+    if(i>0&&j>0&&wa[i-1]===wb[j-1]){ ops.unshift({t:'s',w:wa[i-1]}); i--;j--; }
+    else if(j>0&&(i===0||dp[i][j-1]>=dp[i-1][j])){ ops.unshift({t:'a',w:wb[j-1]}); j--; }
+    else { ops.unshift({t:'r',w:wa[i-1]}); i--; }
+  }
+  ops.forEach(o=>{
+    if(o.t==='s'){ left+=escHtml(o.w); right+=escHtml(o.w); }
+    else if(o.t==='r'){ left+=`<span class="word-del">${escHtml(o.w)}</span>`; }
+    else { right+=`<span class="word-add">${escHtml(o.w)}</span>`; }
+  });
+  return {left,right};
+}
+
+function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderDiff(revA, revB){
+  const diff = computeDiff(revA.content, revB.content);
+  // Stats
+  const added   = diff.filter(r=>r.type==='added').length;
+  const removed = diff.filter(r=>r.type==='removed').length;
+  const changed = diff.filter(r=>r.type==='changed').length;
+  const same    = diff.filter(r=>r.type==='same').length;
+  document.getElementById('diff-stats').innerHTML = `
+    <span style="font-size:12px;font-weight:600;color:var(--text2)">ผลการเปรียบเทียบ:</span>
+    <div class="diff-stat"><div class="diff-stat-dot" style="background:var(--green)"></div> เพิ่ม ${added} บรรทัด</div>
+    <div class="diff-stat"><div class="diff-stat-dot" style="background:var(--red)"></div> ลบ ${removed} บรรทัด</div>
+    <div class="diff-stat"><div class="diff-stat-dot" style="background:var(--amber)"></div> เปลี่ยน ${changed} บรรทัด</div>
+    <div class="diff-stat"><div class="diff-stat-dot" style="background:var(--bg4)"></div> เหมือนเดิม ${same} บรรทัด</div>`;
+  // Headers
+  document.getElementById('diff-left-title').textContent = revA.n+' ('+revA.date+')';
+  document.getElementById('diff-right-title').textContent = revB.n+' ('+revB.date+')';
+  document.getElementById('diff-left-badge').textContent = 'ก่อน';
+  document.getElementById('diff-right-badge').textContent = 'หลัง';
+  // Body
+  const body = document.getElementById('diff-body');
+  let lineL=1, lineR=1;
+  body.innerHTML = diff.map(row => {
+    let lCell='', rCell='';
+    if(row.type==='same'){
+      lCell=`<div class="diff-cell left same"><span class="diff-linenum">${lineL++}</span><span class="diff-text">${escHtml(row.left)}</span></div>`;
+      rCell=`<div class="diff-cell right same"><span class="diff-linenum">${lineR++}</span><span class="diff-text">${escHtml(row.right)}</span></div>`;
+    } else if(row.type==='removed'){
+      lCell=`<div class="diff-cell left removed"><span class="diff-linenum">${lineL++}</span><span class="diff-mark" style="color:var(--red)">−</span><span class="diff-text removed-text">${escHtml(row.left)}</span></div>`;
+      rCell=`<div class="diff-cell right empty"><span class="diff-linenum" style="opacity:.3">·</span></div>`;
+    } else if(row.type==='added'){
+      lCell=`<div class="diff-cell left empty"><span class="diff-linenum" style="opacity:.3">·</span></div>`;
+      rCell=`<div class="diff-cell right added"><span class="diff-linenum">${lineR++}</span><span class="diff-mark" style="color:var(--green)">+</span><span class="diff-text added-text">${escHtml(row.right)}</span></div>`;
+    } else { // changed
+      if(wordDiffMode){
+        const wd=wordDiff(row.left,row.right);
+        lCell=`<div class="diff-cell left changed"><span class="diff-linenum">${lineL++}</span><span class="diff-mark" style="color:var(--amber)">~</span><span class="diff-text changed-text">${wd.left}</span></div>`;
+        rCell=`<div class="diff-cell right changed"><span class="diff-linenum">${lineR++}</span><span class="diff-mark" style="color:var(--amber)">~</span><span class="diff-text changed-text">${wd.right}</span></div>`;
+      } else {
+        lCell=`<div class="diff-cell left changed"><span class="diff-linenum">${lineL++}</span><span class="diff-mark" style="color:var(--amber)">~</span><span class="diff-text changed-text">${escHtml(row.left)}</span></div>`;
+        rCell=`<div class="diff-cell right changed"><span class="diff-linenum">${lineR++}</span><span class="diff-mark" style="color:var(--amber)">~</span><span class="diff-text changed-text">${escHtml(row.right)}</span></div>`;
+      }
+    }
+    return `<div class="diff-row">${lCell}${rCell}</div>`;
+  }).join('');
+  document.getElementById('diff-section').style.display='block';
+  document.getElementById('diff-section').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function hideDiff(){ document.getElementById('diff-section').style.display='none'; }
+function toggleWordDiff(){
+  wordDiffMode=!wordDiffMode;
+  document.getElementById('word-diff-btn').style.background = wordDiffMode?'var(--accent-dim)':'';
+  document.getElementById('word-diff-btn').style.color = wordDiffMode?'var(--accent)':'';
+  document.getElementById('word-diff-btn').style.borderColor = wordDiffMode?'var(--accent-border)':'';
+  if(selectedRevA&&selectedRevB) renderDiff(selectedRevA,selectedRevB);
+}
+
+/* ═══════════════════════════════════
+   REVISION DETAIL MODAL
+══════════════════════════════════ */
+function openRevDetail(docId, revN){
+  const doc = documents.find(d=>d.id===docId);
+  const rev = doc.revs.find(r=>r.n===revN);
+  activeRevDetail = {doc,rev};
+  const sb={Active:'badge-green',Pending:'badge-amber',Superseded:'badge-gray',Obsolete:'badge-gray'};
+  const ctColor={Major:'badge-amber',Minor:'badge-blue',Critical:'badge-red'};
+  document.getElementById('rev-detail-meta').innerHTML=`
+    <div class="meta-item"><div class="meta-key">Revision</div><div class="meta-val" style="font-family:var(--mono);font-size:13px">${rev.n}</div></div>
+    <div class="meta-item"><div class="meta-key">วันที่สร้าง</div><div class="meta-val" style="font-size:12px">${rev.date}</div></div>
+    <div class="meta-item"><div class="meta-key">ผู้แก้ไข</div><div class="meta-val" style="font-size:12px">${rev.by}</div></div>
+    <div class="meta-item"><div class="meta-key">สถานะ</div><div class="meta-val"><span class="badge ${sb[rev.status]||'badge-gray'}">${rev.status}</span></div></div>
+    <div class="meta-item"><div class="meta-key">ประเภทการเปลี่ยนแปลง</div><div class="meta-val"><span class="badge ${ctColor[rev.changeType]||'badge-gray'}">${rev.changeType||'—'}</span></div></div>
+    <div class="meta-item"><div class="meta-key">จำนวนบรรทัด</div><div class="meta-val" style="font-family:var(--mono);font-size:12px">${rev.content.length} lines</div></div>`;
+  document.getElementById('rev-detail-note').textContent=rev.note;
+  document.getElementById('rev-detail-approvals').innerHTML=rev.approvals.map(a=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px">
+      <div style="width:24px;height:24px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text3);flex-shrink:0">${a.by.substring(0,2)}</div>
+      <div style="flex:1"><span style="font-weight:600">${a.step}</span> — ${a.by}</div>
+      <span class="badge ${a.action==='Approved'?'badge-green':a.action==='Pending'?'badge-amber':'badge-blue'}" style="font-size:9px">${a.action}</span>
+      <span style="font-size:10px;color:var(--text3)">${a.date}</span>
+    </div>`).join('');
+  // Hide restore button for current rev
+  const isNotCurrent = doc.revs[0].n !== rev.n;
+  document.getElementById('rev-detail-restore-btn').style.display = isNotCurrent ? 'inline-flex' : 'none';
+  openModal('modal-rev-detail');
+}
+
+/* ═══════════════════════════════════
+   RESTORE MODAL
+══════════════════════════════════ */
+function openRestore(docId, revN){
+  const doc = documents.find(d=>d.id===docId);
+  const rev = doc.revs.find(r=>r.n===revN);
+  activeRevDetail = {doc,rev};
+  const currentRevNum = parseInt(doc.currentRev.replace('Rev ',''))||doc.revs.length;
+  const newRevN = 'Rev '+(currentRevNum+1);
+  document.getElementById('restore-rev-label').textContent=rev.n;
+  document.getElementById('restore-rev-num').textContent=rev.n;
+  document.getElementById('restore-rev-date').textContent=rev.date;
+  document.getElementById('restore-rev-by').textContent=rev.by;
+  document.getElementById('restore-rev-status').textContent=rev.status;
+  document.getElementById('restore-rev-note').textContent=rev.note;
+  document.getElementById('restore-new-rev').value=newRevN;
+  document.getElementById('restore-reason').value='';
+  openModal('modal-restore');
+}
+function openRestoreFromDetail(){
+  closeModal('modal-rev-detail');
+  if(activeRevDetail) openRestore(activeRevDetail.doc.id, activeRevDetail.rev.n);
+}
+function confirmRestore(){
+  const reason=document.getElementById('restore-reason').value.trim();
+  if(!reason){ showToast('กรุณาระบุเหตุผลในการ Restore','error'); return; }
+  closeModal('modal-restore');
+  const newRev=document.getElementById('restore-new-rev').value;
+  showToast(`Restore สำเร็จ — สร้าง ${newRev} จาก ${activeRevDetail.rev.n} พร้อมส่ง Workflow อนุมัติแล้ว`,'success');
+}
+
+/* ═══════════════════════════════════
+   TOAST
+══════════════════════════════════ */
+function showToast(msg,type='info'){
+  const wrap=document.getElementById('toast-wrap');
+  const t=document.createElement('div'); t.className='toast '+type;
+  const icons={success:'circle-check',error:'alert-circle',info:'info'};
+  const colors={success:'var(--green)',error:'var(--red)',info:'var(--accent)'};
+  t.innerHTML=`<i data-lucide="${icons[type]}" style="width:16px;height:16px;color:${colors[type]};flex-shrink:0"></i><span>${msg}</span>`;
+  wrap.appendChild(t); lucide.createIcons();
+  setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateX(20px)'; t.style.transition='.2s'; setTimeout(()=>t.remove(),200); },3500);
+}
+
+/* ═══════════════════════════════════
+   INIT
+══════════════════════════════════ */
+document.addEventListener('DOMContentLoaded',()=>{
+  renderDocList(documents);
+  lucide.createIcons();
+  // Auto-select first doc for demo
+  selectDoc(1);
+});
+
+// ── Role-aware init ──
+document.addEventListener('DOMContentLoaded', () => {
+  buildSidebar('03-revision-control');
+  DMS_applyRoleUI();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+});
+</script>
+</body>
+</html>

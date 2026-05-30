@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Factory DMS — Approval Workflow</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="session.js"></script>
+<script src="sidebar.js"></script>
+<link rel="stylesheet" href="shared.css">
+<style>
+/* Table view styles */
+.approval-table th{background:var(--bg3);font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+.approval-table td{padding:11px 12px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:13px}
+.approval-table tr:last-child td{border-bottom:none}
+.approval-table tr:hover td{background:var(--bg3)}
+.workflow-mini{display:flex;align-items:center;gap:0}
+.wf-step{display:flex;align-items:center}
+.wf-dot{width:20px;height:20px;border-radius:50%;border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0}
+.wf-dot.done{background:var(--green-dim);border-color:var(--green);color:var(--green)}
+.wf-dot.current{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.wf-dot.pending{background:var(--bg4);border-color:var(--border2);color:var(--text3)}
+.wf-line{width:14px;height:2px;background:var(--border2)}
+.wf-line.done{background:var(--green)}
+/* Reject modal enhanced */
+.reject-reason-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.reject-reason-opt{border:1.5px solid var(--border2);border-radius:8px;padding:10px 12px;cursor:pointer;transition:all .15s;font-size:12px;color:var(--text2);display:flex;align-items:flex-start;gap:8px}
+.reject-reason-opt:hover{border-color:var(--amber);color:var(--text)}
+.reject-reason-opt.selected{border-color:var(--amber);background:var(--amber-dim);color:var(--amber)}
+.reject-reason-opt i{flex-shrink:0;margin-top:1px}
+/* Row selected highlight */
+.approval-table tr.selected td{background:var(--accent-dim)}
+/* Checklist in approve modal */
+.checklist-item{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px}
+.checklist-item:last-child{border-bottom:none}
+.checklist-item input[type=checkbox]{width:15px;height:15px;accent-color:var(--green);cursor:pointer}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="btn btn-ghost btn-sm" onclick="toggleSidebar()" style="padding:5px 8px"><i data-lucide="menu"></i></button>
+      <span id="topbar-role" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;margin-right:4px"></span><div class="page-title">Approval Workflow <span class="page-sub">รายการรออนุมัติ</span></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-ghost btn-sm" style="position:relative">
+          <i data-lucide="bell"></i>
+          <span style="position:absolute;top:4px;right:4px;width:6px;height:6px;background:var(--red);border-radius:50%"></span>
+        </button>
+        <div class="divider"></div>
+        <div class="avatar" style="cursor:pointer" onclick="location.href='00-login.html'">SK</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat-box" style="border-left:3px solid var(--amber)"><div class="stat-label">รอฉันอนุมัติ</div><div class="stat-value" style="color:var(--amber)" id="stat-pending">5</div><div class="stat-sub">ต้องดำเนินการวันนี้</div></div>
+        <div class="stat-box" style="border-left:3px solid var(--red)"><div class="stat-label">เกินกำหนด</div><div class="stat-value" style="color:var(--red)">2</div><div class="stat-sub">รอนานกว่า 3 วัน</div></div>
+        <div class="stat-box" style="border-left:3px solid var(--green)"><div class="stat-label">อนุมัติแล้วเดือนนี้</div><div class="stat-value" style="color:var(--green)">41</div><div class="stat-sub">avg 1.8 วัน</div></div>
+        <div class="stat-box" style="border-left:3px solid var(--text3)"><div class="stat-label">ส่งกลับ (Rejected)</div><div class="stat-value" style="color:var(--text3)">6</div><div class="stat-sub">เดือนนี้</div></div>
+      </div>
+
+
+      <!-- Role context banner -->
+      <div id="role-approval-banner" style="margin-bottom:14px;padding:10px 14px;border-radius:8px;font-size:12px;display:flex;align-items:center;gap:8px;display:none"></div>
+      <!-- Filter + Bulk bar -->
+      <div class="filter-bar" style="margin-bottom:14px">
+        <div class="search-box" style="flex:none;width:240px">
+          <i data-lucide="search" style="width:14px;height:14px;color:var(--text3)"></i>
+          <input type="text" placeholder="ค้นหา รหัส / ชื่อเอกสาร..." oninput="filterApproval(this.value)">
+        </div>
+        <select class="filter-select" onchange="filterApprovalStatus(this.value)">
+          <option value="">ทุกสถานะ</option>
+          <option value="urgent">เร่งด่วน / เกินกำหนด</option>
+          <option value="normal">ปกติ</option>
+        </select>
+        <select class="filter-select" onchange="filterApprovalDept(this.value)">
+          <option value="">ทุกแผนก</option>
+          <option value="Production">Production</option>
+          <option value="QA">QA / QC</option>
+          <option value="Engineering">Engineering</option>
+          <option value="Warehouse">Warehouse</option>
+        </select>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button class="btn btn-success btn-sm" onclick="bulkApprove()"><i data-lucide="check-check"></i> อนุมัติที่เลือก</button>
+          <button class="btn btn-danger btn-sm" onclick="bulkReject()"><i data-lucide="corner-up-left"></i> ส่งกลับที่เลือก</button>
+        </div>
+      </div>
+
+      <!-- TABLE VIEW -->
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="table-wrap">
+          <table class="approval-table" style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr>
+                <th style="width:32px"><input type="checkbox" id="check-all-ap" onchange="toggleAllAp(this)" style="cursor:pointer"></th>
+                <th>รหัสเอกสาร</th>
+                <th>ชื่อเอกสาร</th>
+                <th>Rev</th>
+                <th>แผนก</th>
+                <th>ยื่นโดย</th>
+                <th>วันที่ยื่น</th>
+                <th>กำหนด</th>
+                <th style="min-width:200px">Approval Workflow</th>
+                <th style="width:160px">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="approval-tbody"></tbody>
+          </table>
+        </div>
+        <div id="empty-approval" style="display:none;text-align:center;padding:48px;color:var(--text3)">
+          <i data-lucide="circle-check" style="width:48px;height:48px;color:var(--green);display:block;margin:0 auto 12px"></i>
+          <div style="font-size:15px;font-weight:600;color:var(--green);margin-bottom:4px">ไม่มีรายการรออนุมัติ</div>
+          <div style="font-size:13px">ทุกรายการได้รับการดำเนินการแล้ว</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- APPROVE MODAL (with checklist) -->
+<div class="modal-overlay" id="modal-approve">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <div class="modal-title"><i data-lucide="circle-check" style="color:var(--green)"></i> อนุมัติเอกสาร</div>
+      <button class="modal-close" onclick="closeModal('modal-approve')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="card-sm" style="margin-bottom:16px;display:flex;align-items:center;gap:10px;background:var(--green-dim);border-color:rgba(22,163,74,.2)">
+        <div style="width:38px;height:38px;border-radius:8px;background:var(--green-dim);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:18px;border:1px solid rgba(22,163,74,.2)"><i data-lucide="file-text"></i></div>
+        <div><div style="font-size:14px;font-weight:700;font-family:var(--mono)" id="approve-code">—</div><div style="font-size:12px;color:var(--text3)" id="approve-sub">—</div></div>
+      </div>
+
+      <!-- Pre-approve checklist -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">ยืนยันก่อนอนุมัติ</div>
+        <div class="checklist-item"><input type="checkbox" id="chk1" checked><label for="chk1">ตรวจสอบเนื้อหาเอกสารครบถ้วนแล้ว</label></div>
+        <div class="checklist-item"><input type="checkbox" id="chk2" checked><label for="chk2">Change Note ถูกต้องและครอบคลุมการเปลี่ยนแปลง</label></div>
+        <div class="checklist-item"><input type="checkbox" id="chk3"><label for="chk3">เอกสารสอดคล้อง GMP / ISO requirement</label></div>
+        <div class="checklist-item"><input type="checkbox" id="chk4"><label for="chk4">ผู้ที่เกี่ยวข้องได้รับแจ้งแล้ว (ถ้าจำเป็น)</label></div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">ความเห็นประกอบการอนุมัติ (ถ้ามี)</label>
+        <textarea class="form-input form-textarea" id="approve-comment" style="min-height:70px" placeholder="ระบุความเห็นหรือเงื่อนไข..."></textarea>
+      </div>
+      <div style="background:var(--bg3);border-radius:var(--radius);padding:10px 12px;font-size:11px;color:var(--text3);border:1px solid var(--border);display:flex;align-items:flex-start;gap:7px">
+        <i data-lucide="info" style="width:13px;height:13px;flex-shrink:0;margin-top:1px;color:var(--accent)"></i>
+        <span>การอนุมัติจะถูกบันทึกใน Audit Log พร้อม timestamp, IP address และ digital signature ของผู้อนุมัติ</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-approve')">ยกเลิก</button>
+      <button class="btn btn-success" onclick="confirmApprove()"><i data-lucide="check"></i> ยืนยันอนุมัติ</button>
+    </div>
+  </div>
+</div>
+
+<!-- REJECT MODAL (enhanced with reason cards + notify options) -->
+<div class="modal-overlay" id="modal-reject">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title"><i data-lucide="corner-up-left" style="color:var(--amber)"></i> ส่งกลับแก้ไข</div>
+      <button class="modal-close" onclick="closeModal('modal-reject')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="card-sm" style="margin-bottom:14px;display:flex;align-items:center;gap:10px;background:var(--amber-dim);border-color:rgba(180,83,9,.2)">
+        <div style="width:34px;height:34px;border-radius:7px;background:var(--amber-dim);color:var(--amber);display:flex;align-items:center;justify-content:center;font-size:15px;border:1px solid rgba(180,83,9,.2)"><i data-lucide="file-text"></i></div>
+        <div>
+          <div style="font-size:13px;font-weight:700;font-family:var(--mono)" id="reject-code">—</div>
+          <div style="font-size:11px;color:var(--text3)">เอกสารจะถูกส่งกลับไปยังผู้ยื่น พร้อมรายละเอียดที่ต้องแก้ไข</div>
+        </div>
+      </div>
+
+      <!-- Reason Cards -->
+      <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">เลือกเหตุผลหลัก *</div>
+      <div class="reject-reason-grid" id="reject-reason-grid">
+        <div class="reject-reason-opt" onclick="selectRejectReason(this,'spec')" data-reason="spec">
+          <i data-lucide="file-x" style="width:15px;height:15px;color:var(--amber)"></i>
+          <div><div style="font-weight:600;margin-bottom:2px">ข้อมูล Spec ไม่ครบ</div><div style="font-size:10px;color:var(--text3)">ขาดข้อมูล specification หรือ limit</div></div>
+        </div>
+        <div class="reject-reason-opt" onclick="selectRejectReason(this,'gmp')" data-reason="gmp">
+          <i data-lucide="shield-x" style="width:15px;height:15px;color:var(--amber)"></i>
+          <div><div style="font-weight:600;margin-bottom:2px">ไม่สอดคล้อง GMP</div><div style="font-size:10px;color:var(--text3)">เนื้อหาขัดกับ GMP/ISO requirement</div></div>
+        </div>
+        <div class="reject-reason-opt" onclick="selectRejectReason(this,'ref')" data-reason="ref">
+          <i data-lucide="book-open" style="width:15px;height:15px;color:var(--amber)"></i>
+          <div><div style="font-weight:600;margin-bottom:2px">เอกสารอ้างอิงไม่ครบ</div><div style="font-size:10px;color:var(--text3)">ต้องการ reference document เพิ่มเติม</div></div>
+        </div>
+        <div class="reject-reason-opt" onclick="selectRejectReason(this,'format')" data-reason="format">
+          <i data-lucide="layout-template" style="width:15px;height:15px;color:var(--amber)"></i>
+          <div><div style="font-weight:600;margin-bottom:2px">รูปแบบไม่ถูกต้อง</div><div style="font-size:10px;color:var(--text3)">Template/format ไม่ตรงมาตรฐาน</div></div>
+        </div>
+        <div class="reject-reason-opt" onclick="selectRejectReason(this,'content')" data-reason="content">
+          <i data-lucide="pencil" style="width:15px;height:15px;color:var(--amber)"></i>
+          <div><div style="font-weight:600;margin-bottom:2px">เนื้อหาต้องแก้ไข</div><div style="font-size:10px;color:var(--text3)">ขั้นตอนหรือรายละเอียดไม่ถูกต้อง</div></div>
+        </div>
+        <div class="reject-reason-opt" onclick="selectRejectReason(this,'other')" data-reason="other">
+          <i data-lucide="message-circle" style="width:15px;height:15px;color:var(--amber)"></i>
+          <div><div style="font-weight:600;margin-bottom:2px">เหตุผลอื่นๆ</div><div style="font-size:10px;color:var(--text3)">ระบุรายละเอียดเพิ่มเติมด้านล่าง</div></div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">รายละเอียดที่ต้องการให้แก้ไข *</label>
+        <textarea class="form-input form-textarea" id="reject-comment" style="min-height:90px" placeholder="อธิบายรายละเอียดที่ชัดเจน เพื่อให้ผู้แก้ไขดำเนินการได้ถูกต้อง&#10;เช่น: กรุณาแก้ไข hardness spec section 4.2 จาก 80-120N เป็น 100-150N ตาม Product spec SPEC-0042"></textarea>
+      </div>
+
+      <!-- Deadline & Notify -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">กำหนดแก้ไขภายใน</label>
+          <select class="form-input">
+            <option>3 วันทำการ</option><option>5 วันทำการ</option><option>7 วันทำการ</option><option>กำหนดเอง</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">ระดับความเร่งด่วน</label>
+          <select class="form-input">
+            <option>ปกติ</option><option>เร่งด่วน</option><option>วิกฤต</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="background:var(--bg3);border-radius:var(--radius);padding:10px 12px;font-size:12px;border:1px solid var(--border)">
+        <div style="font-weight:700;color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">การแจ้งเตือน</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer"><input type="checkbox" checked style="accent-color:var(--accent)"> In-app</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer"><input type="checkbox" checked style="accent-color:var(--accent)"> Email</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer"><input type="checkbox" style="accent-color:var(--accent)"> Line OA</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer"><input type="checkbox" style="accent-color:var(--accent)"> SMS</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-reject')">ยกเลิก</button>
+      <button class="btn btn-danger" onclick="confirmReject()"><i data-lucide="corner-up-left"></i> ส่งกลับแก้ไข</button>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW DOC MODAL -->
+<div class="modal-overlay" id="modal-view">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <div class="modal-title"><i data-lucide="eye" style="color:var(--accent)"></i> ดูเอกสาร (Read-only)</div>
+      <button class="modal-close" onclick="closeModal('modal-view')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="width:40px;height:40px;border-radius:9px;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:19px"><i data-lucide="file-text"></i></div>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:7px" id="view-code">—<span id="view-badges"></span></div>
+          <div style="font-size:12px;color:var(--text3)" id="view-sub">—</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+        <div class="meta-item"><div class="meta-key">Revision</div><div class="meta-val" id="vd-rev" style="font-family:var(--mono);font-size:12px">—</div></div>
+        <div class="meta-item"><div class="meta-key">แผนก</div><div class="meta-val" id="vd-dept" style="font-size:12px">—</div></div>
+        <div class="meta-item"><div class="meta-key">วันที่ยื่น</div><div class="meta-val" id="vd-date" style="font-size:12px">—</div></div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);padding:18px;min-height:200px">
+        <div style="font-size:14px;font-weight:700;text-align:center;margin-bottom:14px;color:var(--text)" id="view-title">—</div>
+        <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-bottom:5px">1. วัตถุประสงค์</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:10px">เอกสารนี้กำหนดขั้นตอนและความรับผิดชอบในการดำเนินการตามที่ระบุ เพื่อให้มั่นใจว่ากระบวนการเป็นไปตามมาตรฐาน GMP และ ISO 9001:2015 อย่างสม่ำเสมอ</div>
+        <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-bottom:5px">2. ขอบเขต</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:10px">ใช้สำหรับพนักงานในแผนกที่เกี่ยวข้องทุกคน ครอบคลุมทุกกะการทำงาน</div>
+        <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-bottom:5px">3. Change Note (revision นี้)</div>
+        <div style="font-size:12px;background:var(--amber-dim);border:1px solid rgba(180,83,9,.15);border-radius:6px;padding:8px 10px;color:var(--text2)" id="vd-change">—</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-view')">ปิด</button>
+      <button class="btn btn-ghost"><i data-lucide="download"></i> ดาวน์โหลด</button>
+      <button class="btn btn-success" onclick="closeModal('modal-view');openApprove(currentViewId)"><i data-lucide="check"></i> อนุมัติจากหน้านี้</button>
+      <button class="btn btn-danger btn-sm" onclick="closeModal('modal-view');openReject(currentViewId)"><i data-lucide="corner-up-left"></i> ส่งกลับ</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script>
+const approvals = [
+  {id:101,code:'WI-QC-015',name:'การตรวจสอบคุณภาพ In-process ไลน์ A',rev:'Rev 2',submitter:'นภา P.',submitDate:'27 พ.ค. 68',dept:'QA',priority:'normal',daysLeft:1,
+   steps:[{label:'Author',done:true},{label:'QA Lead',done:true},{label:'ผจก. QA',done:false,current:true},{label:'Director',done:false}],
+   changeNote:'เพิ่มการตรวจ Hardness ทุก 30 นาที และ Thickness ทุก 1 ชม.'},
+  {id:102,code:'SOP-ENG-022',name:'การ Calibrate เครื่องชั่ง Class II',rev:'Rev 1',submitter:'อนุชา T.',submitDate:'24 พ.ค. 68',dept:'Engineering',priority:'urgent',daysOverdue:3,
+   steps:[{label:'Author',done:true},{label:'Eng. Lead',done:true},{label:'Safety',done:false,current:true},{label:'ผจก.',done:false}],
+   changeNote:'เอกสารใหม่ — ขั้นตอน Calibrate ตาม OIML R 76'},
+  {id:103,code:'SOP-QC-008',name:'การทดสอบ Dissolution ตาม USP <711>',rev:'Rev 1',submitter:'นภา P.',submitDate:'25 พ.ค. 68',dept:'QA',priority:'normal',daysLeft:2,
+   steps:[{label:'Author',done:true},{label:'QA Lead',done:false,current:true},{label:'ผจก. QA',done:false},{label:'Director',done:false}],
+   changeNote:'เอกสาร SOP ใหม่ — Dissolution testing method'},
+  {id:104,code:'FM-LOG-003',name:'Daily Equipment Log Sheet — Dryer',rev:'Rev 2',submitter:'พิมพ์ W.',submitDate:'26 พ.ค. 68',dept:'Warehouse',priority:'normal',daysLeft:3,
+   steps:[{label:'Author',done:true},{label:'ผจก.',done:false,current:true},{label:'Director',done:false}],
+   changeNote:'เพิ่ม column temperature record ทุก 2 ชม.'},
+  {id:105,code:'WI-PRD-055',name:'การ Setup Line สำหรับผลิต Capsule B',rev:'Rev 1',submitter:'สมชาย K.',submitDate:'28 พ.ค. 68',dept:'Production',priority:'urgent',daysLeft:0,
+   steps:[{label:'Author',done:true},{label:'QA Lead',done:false,current:true},{label:'ผจก.',done:false},{label:'Director',done:false}],
+   changeNote:'WI ใหม่สำหรับผลิต Capsule line B ที่เพิ่งเปิดใหม่'},
+];
+
+let queue=[...approvals];
+let activeId=null;
+let currentViewId=null;
+let selectedReason=null;
+
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('collapsed');}
+function setRoleBanner(){
+  const role=DMS_getRole();const info=DMS_getRoleInfo();
+  const b=document.getElementById('role-approval-banner');
+  if(!b)return;
+  const msgs={
+    manager:'คุณมีสิทธิ์อนุมัติในฐานะ ผู้จัดการ — แสดงเฉพาะรายการที่รอขั้นตอนของคุณ',
+    qa:'คุณมีสิทธิ์อนุมัติในฐานะ QA Manager — แสดงเฉพาะรายการ QA workflow',
+    director:'คุณมีสิทธิ์อนุมัติขั้นสุดท้าย — Director final approval เท่านั้น',
+    admin:'Admin View — แสดงรายการทั้งหมดในระบบ',
+    operator:'คุณไม่มีสิทธิ์อนุมัติเอกสาร — หน้านี้แสดงเพื่อการ demo เท่านั้น',
+  };
+  const roleColors={manager:'#2563eb',qa:'#7c3aed',director:'#b45309',admin:'#dc2626',operator:'#16a34a'};
+  const col=roleColors[role]||'#2563eb';
+  b.style.cssText=`display:flex;background:${col}0d;border:1px solid ${col}28;color:${col}`;
+  b.innerHTML=`<i data-lucide="info" style="width:14px;height:14px;flex-shrink:0"></i><span><strong>${info.label}</strong> — ${msgs[role]||''}</span>`;
+  lucide.createIcons();
+}
+function openModal(id){document.getElementById(id).classList.add('open');lucide.createIcons();}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');}));
+
+function renderApprovals(data){
+  const tbody=document.getElementById('approval-tbody');
+  const empty=document.getElementById('empty-approval');
+  tbody.innerHTML='';
+  if(!data.length){empty.style.display='block';lucide.createIcons();return;}
+  empty.style.display='none';
+  data.forEach(a=>{
+    const urgent=a.priority==='urgent'||(a.daysOverdue&&a.daysOverdue>0);
+    const deadlineBadge=urgent
+      ?`<span class="badge badge-red"><i data-lucide="flame" style="width:9px;height:9px"></i> ${a.daysOverdue?'เกิน '+a.daysOverdue+' วัน':'เร่งด่วน'}</span>`
+      :a.daysLeft===0?`<span class="badge badge-amber">วันนี้!</span>`
+      :a.daysLeft?`<span class="badge badge-amber">เหลือ ${a.daysLeft} วัน</span>`:'';
+    const wfHtml=a.steps.map((s,i)=>`
+      <div class="wf-step">
+        <div class="wf-dot ${s.done?'done':s.current?'current':'pending'}" title="${s.label}">
+          ${s.done?'<i data-lucide="check" style="width:10px;height:10px"></i>':s.current?'<i data-lucide="clock" style="width:10px;height:10px"></i>':(i+1)}
+        </div>
+        ${i<a.steps.length-1?`<div class="wf-line${s.done?' done':''}"></div>`:''}
+      </div>`).join('');
+    const tr=document.createElement('tr');
+    tr.className=urgent?'':'';
+    tr.innerHTML=`
+      <td><input type="checkbox" class="ap-check" data-id="${a.id}" style="cursor:pointer"></td>
+      <td><span class="tag" style="font-size:11px">${a.code}</span></td>
+      <td style="max-width:220px">
+        <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${a.name}">${a.name}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${a.changeNote.substring(0,50)}${a.changeNote.length>50?'…':''}</div>
+      </td>
+      <td><span class="badge badge-blue" style="font-family:var(--mono)">${a.rev}</span></td>
+      <td style="font-size:12px;color:var(--text2)">${a.dept}</td>
+      <td style="font-size:12px;color:var(--text2)">${a.submitter}</td>
+      <td style="font-size:11px;color:var(--text3)">${a.submitDate}</td>
+      <td>${deadlineBadge}</td>
+      <td>
+        <div class="workflow-mini">${wfHtml}</div>
+        <div style="font-size:9px;color:var(--text3);margin-top:4px">ขั้นตอน ${a.steps.filter(s=>s.current).map(s=>s.label).join(', ')||'รอดำเนินการ'}</div>
+      </td>
+      <td>
+        <div class="action-menu" style="flex-wrap:wrap;gap:3px">
+          <button class="btn btn-success btn-xs" onclick="openApprove(${a.id})" title="อนุมัติ"><i data-lucide="check" style="width:12px;height:12px"></i> อนุมัติ</button>
+          <button class="btn btn-danger btn-xs" onclick="openReject(${a.id})" title="ส่งกลับ"><i data-lucide="corner-up-left" style="width:12px;height:12px"></i> ส่งกลับ</button>
+          <button class="btn btn-ghost btn-xs" onclick="openViewDoc(${a.id})" title="ดูเอกสาร"><i data-lucide="eye" style="width:12px;height:12px"></i></button>
+          <button class="btn btn-ghost btn-xs" onclick="showToast('มอบหมาย — coming soon','info')" title="มอบหมาย"><i data-lucide="user-plus" style="width:12px;height:12px"></i></button>
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+  lucide.createIcons();
+}
+
+function openApprove(id){
+  activeId=id;const a=queue.find(x=>x.id===id);if(!a)return;
+  document.getElementById('approve-code').textContent=a.code;
+  document.getElementById('approve-sub').textContent=a.name+' · '+a.rev;
+  document.getElementById('approve-comment').value='';
+  ['chk1','chk2','chk3','chk4'].forEach(id=>document.getElementById(id).checked=id==='chk1'||id==='chk2');
+  openModal('modal-approve');
+}
+function openReject(id){
+  activeId=id;const a=queue.find(x=>x.id===id);if(!a)return;
+  document.getElementById('reject-code').textContent=a.code+' — '+a.rev;
+  document.getElementById('reject-comment').value='';
+  selectedReason=null;
+  document.querySelectorAll('.reject-reason-opt').forEach(o=>o.classList.remove('selected'));
+  openModal('modal-reject');
+}
+function selectRejectReason(el,reason){
+  document.querySelectorAll('.reject-reason-opt').forEach(o=>o.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedReason=reason;
+}
+function openViewDoc(id){
+  currentViewId=id;const a=queue.find(x=>x.id===id);if(!a)return;
+  const badges=`<span class="badge badge-amber">รอ Approve</span> <span class="badge badge-blue">${a.rev}</span>`;
+  document.getElementById('view-code').innerHTML=`<span style="font-family:var(--mono)">${a.code}</span> ${badges}`;
+  document.getElementById('view-sub').textContent=a.name;
+  document.getElementById('view-title').textContent=a.name;
+  document.getElementById('vd-rev').textContent=a.rev;
+  document.getElementById('vd-dept').textContent=a.dept;
+  document.getElementById('vd-date').textContent=a.submitDate;
+  document.getElementById('vd-change').textContent=a.changeNote;
+  openModal('modal-view');
+}
+
+function confirmApprove(){
+  closeModal('modal-approve');
+  const a=queue.find(x=>x.id===activeId);
+  showToast('อนุมัติ '+(a?a.code:'')+' เรียบร้อย — แจ้งผู้เกี่ยวข้องทางอีเมลแล้ว','success');
+  removeItem(activeId);
+}
+function confirmReject(){
+  if(!selectedReason){showToast('กรุณาเลือกเหตุผลที่ส่งกลับ','error');return;}
+  if(!document.getElementById('reject-comment').value.trim()){showToast('กรุณาระบุรายละเอียดที่ต้องแก้ไข','error');return;}
+  closeModal('modal-reject');
+  const a=queue.find(x=>x.id===activeId);
+  showToast('ส่งกลับ '+(a?a.code:'')+' ให้ '+(a?a.submitter:'')+' แก้ไขแล้ว','info');
+  removeItem(activeId);
+}
+function removeItem(id){
+  setTimeout(()=>{
+    const idx=queue.findIndex(x=>x.id===id);if(idx>-1)queue.splice(idx,1);
+    renderApprovals(queue);
+    document.getElementById('stat-pending').textContent=queue.length;
+    document.getElementById('sidebar-badge').textContent=queue.length;
+  },350);
+}
+
+function bulkApprove(){
+  const checked=document.querySelectorAll('.ap-check:checked');
+  if(!checked.length){showToast('เลือกรายการก่อน','error');return;}
+  showToast('อนุมัติ '+checked.length+' รายการเรียบร้อย','success');
+  checked.forEach(cb=>{const id=parseInt(cb.dataset.id);removeItem(id);});
+}
+function bulkReject(){
+  const checked=document.querySelectorAll('.ap-check:checked');
+  if(!checked.length){showToast('เลือกรายการก่อน','error');return;}
+  // open reject modal for first, then batch
+  const id=parseInt(checked[0].dataset.id);
+  openReject(id);
+}
+function toggleAllAp(cb){document.querySelectorAll('.ap-check').forEach(c=>c.checked=cb.checked);}
+function filterApproval(q){renderApprovals(queue.filter(a=>a.code.toLowerCase().includes(q.toLowerCase())||a.name.toLowerCase().includes(q.toLowerCase())));}
+function filterApprovalStatus(v){if(!v)renderApprovals(queue);else renderApprovals(queue.filter(a=>v==='urgent'?(a.priority==='urgent'||(a.daysOverdue>0)):a.priority==='normal'));}
+function filterApprovalDept(v){if(!v)renderApprovals(queue);else renderApprovals(queue.filter(a=>a.dept.includes(v)));}
+
+function showToast(msg,type='info'){
+  const wrap=document.getElementById('toast-wrap');
+  const t=document.createElement('div');t.className='toast '+type;
+  const icons={success:'circle-check',error:'alert-circle',info:'info'};
+  const colors={success:'var(--green)',error:'var(--red)',info:'var(--accent)'};
+  t.innerHTML=`<i data-lucide="${icons[type]}" style="width:16px;height:16px;color:${colors[type]};flex-shrink:0"></i><span>${msg}</span>`;
+  wrap.appendChild(t);lucide.createIcons();
+  setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(20px)';t.style.transition='.2s';setTimeout(()=>t.remove(),200);},3000);
+}
+
+document.addEventListener('DOMContentLoaded',()=>{renderApprovals(queue);setRoleBanner();lucide.createIcons();});
+
+// ── Role-aware init ──
+document.addEventListener('DOMContentLoaded', () => {
+  buildSidebar('02-approval');
+  DMS_applyRoleUI();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+});
+</script>
+</body>
+</html>

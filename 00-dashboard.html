@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Factory DMS — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="session.js"></script>
+<script src="sidebar.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="shared.css">
+<style>
+.dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.dash-grid-3{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px}
+.activity-item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.activity-item:last-child{border-bottom:none}
+.act-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.act-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.urgent-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);margin-bottom:6px;cursor:pointer;transition:all .15s}
+.urgent-row:hover{border-color:var(--accent);background:var(--accent-dim)}
+.urgency-bar{height:6px;border-radius:3px;background:var(--bg4);overflow:hidden;margin-top:4px}
+.urgency-fill{height:100%;border-radius:3px}
+.mini-stat{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:var(--bg3);border:1px solid var(--border)}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="btn btn-ghost btn-sm" onclick="toggleSidebar()" style="padding:5px 8px"><i data-lucide="menu"></i></button>
+      <span id="topbar-role" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;margin-right:4px"></span><div class="page-title">Dashboard <span class="page-sub">ภาพรวมระบบ</span></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="font-size:11px;color:var(--text3)">28 พ.ค. 2568 · กะเช้า</span>
+        <div class="divider"></div>
+        <button class="btn btn-ghost btn-sm" style="position:relative" onclick="location.href='02-approval.html'">
+          <i data-lucide="bell"></i>
+          <span style="position:absolute;top:4px;right:4px;width:6px;height:6px;background:var(--red);border-radius:50%"></span>
+        </button>
+        <div class="avatar" style="cursor:pointer" onclick="location.href='00-login.html'">SK</div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- KPI Stats -->
+      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
+        <div class="stat-box" style="border-left:3px solid var(--accent)">
+          <div class="stat-label">เอกสารทั้งหมด</div>
+          <div class="stat-value" style="color:var(--text)">248</div>
+          <div class="stat-sub" style="color:var(--green)">▲ +12 เดือนนี้</div>
+        </div>
+        <div class="stat-box" style="border-left:3px solid var(--amber)">
+          <div class="stat-label">รออนุมัติ</div>
+          <div class="stat-value" style="color:var(--amber)">5</div>
+          <div class="stat-sub" style="color:var(--red)">2 เกินกำหนด</div>
+        </div>
+        <div class="stat-box" style="border-left:3px solid var(--green)">
+          <div class="stat-label">อนุมัติเดือนนี้</div>
+          <div class="stat-value" style="color:var(--green)">41</div>
+          <div class="stat-sub">avg 1.8 วัน/รายการ</div>
+        </div>
+        <div class="stat-box" style="border-left:3px solid var(--red)">
+          <div class="stat-label">ใกล้หมดอายุ</div>
+          <div class="stat-value" style="color:var(--red)">7</div>
+          <div class="stat-sub">ภายใน 30 วัน</div>
+        </div>
+      </div>
+
+      <!-- Charts row -->
+      <div class="dash-grid-3">
+        <!-- Activity chart -->
+        <div class="card">
+          <div class="section-header">
+            <div class="section-title"><i data-lucide="bar-chart-2"></i> เอกสารที่เพิ่ม/อนุมัติ รายเดือน</div>
+            <select class="filter-select" style="font-size:11px;padding:4px 8px" onchange="updateChart(this.value)">
+              <option value="6">6 เดือน</option><option value="12">12 เดือน</option>
+            </select>
+          </div>
+          <canvas id="actChart" height="90"></canvas>
+        </div>
+        <!-- Status donut -->
+        <div class="card">
+          <div class="section-header" style="margin-bottom:10px">
+            <div class="section-title"><i data-lucide="pie-chart"></i> สัดส่วนสถานะ</div>
+          </div>
+          <canvas id="statusChart" height="130"></canvas>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px">
+            <div class="mini-stat"><span style="width:8px;height:8px;border-radius:50%;background:#16a34a;flex-shrink:0"></span><div><div style="font-size:12px;font-weight:600">Active</div><div style="font-size:10px;color:var(--text3)">196 รายการ</div></div></div>
+            <div class="mini-stat"><span style="width:8px;height:8px;border-radius:50%;background:#b45309;flex-shrink:0"></span><div><div style="font-size:12px;font-weight:600">Pending</div><div style="font-size:10px;color:var(--text3)">37 รายการ</div></div></div>
+            <div class="mini-stat"><span style="width:8px;height:8px;border-radius:50%;background:#2563eb;flex-shrink:0"></span><div><div style="font-size:12px;font-weight:600">Draft</div><div style="font-size:10px;color:var(--text3)">8 รายการ</div></div></div>
+            <div class="mini-stat"><span style="width:8px;height:8px;border-radius:50%;background:#9096b2;flex-shrink:0"></span><div><div style="font-size:12px;font-weight:600">Obsolete</div><div style="font-size:10px;color:var(--text3)">7 รายการ</div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom row -->
+      <div class="dash-grid">
+        <!-- Urgent / Quick actions -->
+        <div class="card">
+          <div class="section-header">
+            <div class="section-title"><i data-lucide="flame"></i> รายการด่วน — ต้องดำเนินการ</div>
+            <button class="btn btn-ghost btn-sm" onclick="location.href='02-approval.html'">ดูทั้งหมด <i data-lucide="arrow-right"></i></button>
+          </div>
+          <div class="urgent-row" onclick="location.href='02-approval.html'">
+            <div class="act-icon" style="background:var(--red-dim);color:var(--red)"><i data-lucide="flame"></i></div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px">SOP-ENG-022 <span class="badge badge-red" style="font-size:9px">เกิน 3 วัน</span></div>
+              <div style="font-size:11px;color:var(--text3)">การ Calibrate เครื่องชั่ง Class II · รอ Safety</div>
+            </div>
+            <i data-lucide="chevron-right" style="color:var(--text3)"></i>
+          </div>
+          <div class="urgent-row" onclick="location.href='02-approval.html'">
+            <div class="act-icon" style="background:var(--amber-dim);color:var(--amber)"><i data-lucide="clock"></i></div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px">WI-QC-015 <span class="badge badge-amber" style="font-size:9px">เหลือ 1 วัน</span></div>
+              <div style="font-size:11px;color:var(--text3)">การตรวจสอบ In-process ไลน์ A · รอ ผจก. QA</div>
+            </div>
+            <i data-lucide="chevron-right" style="color:var(--text3)"></i>
+          </div>
+          <div class="urgent-row" onclick="location.href='02-approval.html'">
+            <div class="act-icon" style="background:var(--amber-dim);color:var(--amber)"><i data-lucide="clock"></i></div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px">WI-PRD-055 <span class="badge badge-amber" style="font-size:9px">เร่งด่วน</span></div>
+              <div style="font-size:11px;color:var(--text3)">Setup Line Capsule B · รอ QA Lead</div>
+            </div>
+            <i data-lucide="chevron-right" style="color:var(--text3)"></i>
+          </div>
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+            <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">เอกสารใกล้หมดอายุ Review Cycle</div>
+            <div class="urgent-row" style="background:var(--bg3)">
+              <div class="act-icon" style="background:var(--purple-dim);color:var(--purple)"><i data-lucide="calendar"></i></div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:12px;font-weight:600">FM-LOG-003 · Daily Equipment Log</div>
+                <div class="urgency-bar" style="margin-top:5px"><div class="urgency-fill" style="width:85%;background:var(--amber)"></div></div>
+                <div style="font-size:10px;color:var(--text3);margin-top:2px">ครบ review cycle 28 มิ.ย. 68 · เหลือ 28 วัน</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent activity -->
+        <div class="card">
+          <div class="section-header">
+            <div class="section-title"><i data-lucide="activity"></i> กิจกรรมล่าสุด</div>
+          </div>
+          <div id="activity-feed"></div>
+        </div>
+      </div>
+
+      <!-- Dept breakdown -->
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title"><i data-lucide="building-2"></i> เอกสารแยกตามแผนก</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+          <div id="dept-production"></div>
+          <div id="dept-qa"></div>
+          <div id="dept-engineering"></div>
+          <div id="dept-warehouse"></div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script>
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('collapsed');}
+
+const activities = [
+  {action:'APPROVED',doc:'WI-PRD-042 Rev 3',by:'วิภา S.',time:'10 นาทีที่แล้ว',color:'var(--green)',icon:'circle-check'},
+  {action:'SUBMITTED',doc:'WI-QC-015 Rev 2',by:'นภา P.',time:'1 ชม.ที่แล้ว',color:'var(--accent)',icon:'send'},
+  {action:'UPLOADED',doc:'SOP-ENG-022 Rev 1',by:'อนุชา T.',time:'3 ชม.ที่แล้ว',color:'var(--accent)',icon:'upload'},
+  {action:'REJECTED',doc:'SOP-QC-001 Rev 3',by:'วิภา S.',time:'เมื่อวาน 16:05',color:'var(--amber)',icon:'corner-up-left'},
+  {action:'APPROVED',doc:'FM-QA-021 Rev 8',by:'ผู้อำนวยการ',time:'เมื่อวาน 14:00',color:'var(--green)',icon:'circle-check'},
+  {action:'CREATED',doc:'SOP-PRD-012 Draft',by:'สมชาย K.',time:'2 วันที่แล้ว',color:'var(--text3)',icon:'file-plus'},
+];
+
+function renderActivity(){
+  document.getElementById('activity-feed').innerHTML = activities.map(a=>`
+    <div class="activity-item">
+      <div class="act-icon" style="background:rgba(0,0,0,0.04);color:${a.color}"><i data-lucide="${a.icon}"></i></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px"><span style="font-weight:700;color:${a.color}">${a.action}</span> <span style="color:var(--text2)">${a.doc}</span></div>
+        <div style="font-size:11px;color:var(--text3)">${a.by} · ${a.time}</div>
+      </div>
+    </div>`).join('');
+  lucide.createIcons();
+}
+
+const depts = [
+  {id:'production',name:'Production',total:98,active:82,pending:12,color:'#2563eb'},
+  {id:'qa',name:'QA / QC',total:72,active:58,pending:18,color:'#16a34a'},
+  {id:'engineering',name:'Engineering',total:51,active:40,pending:5,color:'#b45309'},
+  {id:'warehouse',name:'Warehouse',total:27,active:16,pending:2,color:'#7c3aed'},
+];
+depts.forEach(d=>{
+  const pct = Math.round(d.active/d.total*100);
+  document.getElementById('dept-'+d.id).innerHTML=`
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;border-top:3px solid ${d.color}">
+      <div style="font-size:13px;font-weight:700;margin-bottom:2px">${d.name}</div>
+      <div style="font-size:22px;font-weight:700;font-family:var(--mono);margin-bottom:6px">${d.total}</div>
+      <div style="height:5px;border-radius:3px;background:var(--bg4);overflow:hidden;margin-bottom:6px"><div style="height:100%;border-radius:3px;background:${d.color};width:${pct}%"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3)">
+        <span>Active: ${d.active}</span><span style="color:var(--amber)">Pending: ${d.pending}</span>
+      </div>
+    </div>`;
+});
+
+// Activity chart
+let actChart;
+const months6 = ['ธ.ค.','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.'];
+const months12 = ['มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.'];
+const added6 = [8,12,7,15,10,14];
+const approved6 = [6,10,5,13,9,12];
+const added12 = [5,9,6,8,7,8,12,7,15,10,14,9];
+const approved12 = [4,7,5,6,6,7,10,5,13,9,12,8];
+
+function buildChart(labels, d1, d2){
+  const ctx = document.getElementById('actChart').getContext('2d');
+  if(actChart) actChart.destroy();
+  actChart = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'อัปโหลด',data:d1,backgroundColor:'rgba(37,99,235,0.15)',borderColor:'#2563eb',borderWidth:1.5,borderRadius:4},
+        {label:'อนุมัติ',data:d2,backgroundColor:'rgba(22,163,74,0.15)',borderColor:'#16a34a',borderWidth:1.5,borderRadius:4}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:true,
+      plugins:{legend:{position:'bottom',labels:{font:{family:'Sarabun',size:11},padding:12,boxWidth:10}}},
+      scales:{
+        x:{grid:{display:false},ticks:{font:{family:'Sarabun',size:10}}},
+        y:{grid:{color:'rgba(0,0,0,0.05)'},ticks:{font:{family:'Sarabun',size:10},stepSize:5}}
+      }
+    }
+  });
+}
+function updateChart(v){
+  if(v==='12') buildChart(months12,added12,approved12);
+  else buildChart(months6,added6,approved6);
+}
+
+// Status donut
+new Chart(document.getElementById('statusChart').getContext('2d'),{
+  type:'doughnut',
+  data:{
+    labels:['Active','Pending','Draft','Obsolete'],
+    datasets:[{data:[196,37,8,7],backgroundColor:['#16a34a','#b45309','#2563eb','#9096b2'],borderWidth:0,hoverOffset:4}]
+  },
+  options:{
+    responsive:true,cutout:'68%',
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.raw} รายการ`}}}
+  }
+});
+
+document.addEventListener('DOMContentLoaded',()=>{
+  buildChart(months6,added6,approved6);
+  renderActivity();
+  lucide.createIcons();
+});
+
+// ── Role-aware init ──
+document.addEventListener('DOMContentLoaded', () => {
+  buildSidebar('00-dashboard');
+  DMS_applyRoleUI();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Factory DMS — เอกสารของฉัน</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="session.js"></script>
+<script src="sidebar.js"></script>
+<link rel="stylesheet" href="shared.css">
+<style>
+.emp-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(22,163,74,.1);color:var(--green);border:1px solid rgba(22,163,74,.2)}
+.status-track{display:flex;align-items:center;gap:0}
+.st-step{display:flex;flex-direction:column;align-items:center;gap:3px}
+.st-circle{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;border:2px solid var(--border2);background:var(--bg4);color:var(--text3)}
+.st-circle.done{background:var(--green-dim);border-color:var(--green);color:var(--green)}
+.st-circle.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.st-circle.reject{background:var(--red-dim);border-color:var(--red);color:var(--red)}
+.st-label{font-size:9px;color:var(--text3);white-space:nowrap;text-align:center;font-weight:600;max-width:44px;line-height:1.2}
+.st-label.done{color:var(--green)}.st-label.active{color:var(--accent)}.st-label.reject{color:var(--red)}
+.st-line{width:20px;height:2px;background:var(--border2);margin-bottom:14px}
+.st-line.done{background:var(--green)}
+.doc-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:10px;cursor:pointer;transition:all .15s;box-shadow:var(--shadow)}
+.doc-card:hover{border-color:var(--border2);box-shadow:var(--shadow-md)}
+.doc-card.urgent{border-left:3px solid var(--red)}
+.quick-action{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);cursor:pointer;transition:all .15s;text-align:center;box-shadow:var(--shadow)}
+.quick-action:hover{border-color:var(--accent);background:var(--accent-dim)}
+.quick-action i{font-size:22px}
+.quick-action span{font-size:11px;font-weight:600;color:var(--text2)}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="btn btn-ghost btn-sm" onclick="toggleSidebar()" style="padding:5px 8px"><i data-lucide="menu"></i></button>
+      <span id="topbar-role" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;margin-right:4px"></span><div class="page-title">เอกสารของฉัน <span class="page-sub">My Documents</span></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-primary btn-sm" onclick="openModal('modal-upload')"><i data-lucide="upload"></i> อัปโหลดเอกสาร</button>
+        <button class="btn btn-ghost btn-sm" onclick="location.href='emp-04-notification.html'" style="position:relative">
+          <i data-lucide="bell"></i>
+          <span style="position:absolute;top:4px;right:4px;width:6px;height:6px;background:var(--red);border-radius:50%"></span>
+        </button>
+        <div class="divider"></div>
+        <div class="avatar" style="cursor:pointer" onclick="location.href='00-login.html'" title="ออกจากระบบ">AT</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- Welcome + quick actions -->
+      <div class="card" style="margin-bottom:16px;padding:16px 20px;background:linear-gradient(135deg,#eff6ff 0%,#f0fdf4 100%);border-color:var(--accent-border)">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+          <div>
+            <div style="font-size:16px;font-weight:700;color:var(--text)">สวัสดี อนุชา 👋</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:3px">วันศุกร์ที่ 28 พ.ค. 2568 · กะเช้า · แผนก Engineering</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <div style="text-align:center;padding:8px 16px;background:var(--bg2);border-radius:var(--radius);border:1px solid var(--border)">
+              <div style="font-size:18px;font-weight:700;font-family:var(--mono);color:var(--amber)">2</div>
+              <div style="font-size:10px;color:var(--text3)">รอผล</div>
+            </div>
+            <div style="text-align:center;padding:8px 16px;background:var(--bg2);border-radius:var(--radius);border:1px solid var(--border)">
+              <div style="font-size:18px;font-weight:700;font-family:var(--mono);color:var(--red)">1</div>
+              <div style="font-size:10px;color:var(--text3)">ต้องแก้ไข</div>
+            </div>
+            <div style="text-align:center;padding:8px 16px;background:var(--bg2);border-radius:var(--radius);border:1px solid var(--border)">
+              <div style="font-size:18px;font-weight:700;font-family:var(--mono);color:var(--green)">5</div>
+              <div style="font-size:10px;color:var(--text3)">อนุมัติแล้ว</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick actions -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
+        <div class="quick-action" onclick="openModal('modal-upload')">
+          <i data-lucide="upload" style="color:var(--accent)"></i>
+          <span>อัปโหลดเอกสาร</span>
+        </div>
+        <div class="quick-action" onclick="location.href='emp-02-browse.html'">
+          <i data-lucide="search" style="color:var(--green)"></i>
+          <span>ค้นหาเอกสาร</span>
+        </div>
+        <div class="quick-action" onclick="location.href='emp-03-tracking.html'">
+          <i data-lucide="git-branch" style="color:var(--amber)"></i>
+          <span>ติดตามสถานะ</span>
+        </div>
+        <div class="quick-action" onclick="openModal('modal-upload')">
+          <i data-lucide="pencil" style="color:var(--purple)"></i>
+          <span>สร้าง Revision</span>
+        </div>
+      </div>
+
+      <!-- Needs action -->
+      <div style="margin-bottom:20px">
+        <div class="section-header" style="margin-bottom:10px">
+          <div class="section-title"><i data-lucide="alert-circle" style="color:var(--red)"></i> ต้องดำเนินการ</div>
+        </div>
+        <div class="doc-card urgent" onclick="openDetail('SOP-ENG-022')">
+          <div style="display:flex;align-items:flex-start;gap:12px">
+            <div style="width:36px;height:36px;border-radius:8px;background:var(--red-dim);color:var(--red);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i data-lucide="corner-up-left"></i></div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:3px">
+                <span style="font-family:var(--mono);font-size:12px;font-weight:700">SOP-ENG-022</span>
+                <span class="badge badge-red">ถูกส่งกลับแก้ไข</span>
+                <span style="font-size:11px;color:var(--text3);margin-left:auto">27 พ.ค. 68 16:05</span>
+              </div>
+              <div style="font-size:13px;color:var(--text2);margin-bottom:5px">การ Calibrate เครื่องชั่ง Class II</div>
+              <div style="background:var(--red-dim);border:1px solid rgba(220,38,38,.15);border-radius:6px;padding:7px 10px;font-size:11px;color:var(--red);margin-bottom:8px">
+                <strong>ความเห็นผู้ตรวจ:</strong> ข้อมูล Spec ไม่ครบถ้วน — กรุณาระบุ tolerance range ของเครื่องชั่ง และเพิ่ม reference OIML R 76
+              </div>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openModal('modal-upload')"><i data-lucide="pencil"></i> แก้ไขและส่งใหม่</button>
+                <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openDetail('SOP-ENG-022')"><i data-lucide="eye"></i> ดูรายละเอียด</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- My submissions -->
+      <div>
+        <div class="section-header" style="margin-bottom:10px">
+          <div class="section-title"><i data-lucide="files"></i> เอกสารที่ฉันส่ง</div>
+          <select class="filter-select" style="font-size:11px" onchange="filterMyDocs(this.value)">
+            <option value="">ทุกสถานะ</option>
+            <option value="pending">รออนุมัติ</option>
+            <option value="approved">อนุมัติแล้ว</option>
+            <option value="rejected">ส่งกลับ</option>
+            <option value="draft">Draft</option>
+          </select>
+        </div>
+        <div id="my-doc-list"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- UPLOAD MODAL -->
+<div class="modal-overlay" id="modal-upload">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i data-lucide="upload" style="color:var(--accent)"></i> อัปโหลดเอกสาร / สร้าง Revision</div>
+      <button class="modal-close" onclick="closeModal('modal-upload')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+        <div class="quick-action" id="opt-new" onclick="selectUploadType('new')" style="border:2px solid var(--accent);background:var(--accent-dim)">
+          <i data-lucide="file-plus" style="color:var(--accent)"></i>
+          <span style="color:var(--accent)">เอกสารใหม่</span>
+        </div>
+        <div class="quick-action" id="opt-rev" onclick="selectUploadType('rev')">
+          <i data-lucide="git-branch" style="color:var(--purple)"></i>
+          <span>สร้าง Revision</span>
+        </div>
+      </div>
+      <div class="drop-zone" onclick="document.getElementById('file-in').click()">
+        <i data-lucide="cloud-upload"></i>
+        <div style="font-size:14px;color:var(--text2);margin-bottom:3px">ลากไฟล์มาวาง หรือคลิกเพื่อเลือก</div>
+        <div style="font-size:11px">PDF, DOCX · ไม่เกิน 50 MB</div>
+        <input type="file" id="file-in" style="display:none" onchange="handleFile(this)">
+      </div>
+      <div id="file-preview" style="display:none;margin-top:8px">
+        <div class="card-sm" style="display:flex;align-items:center;gap:10px">
+          <div style="width:30px;height:30px;border-radius:6px;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center"><i data-lucide="file-text"></i></div>
+          <div style="flex:1"><div style="font-size:12px;font-weight:600" id="file-name">—</div><div class="progress-bar"><div class="progress-fill" id="file-prog" style="width:0%"></div></div></div>
+          <span style="font-size:11px;color:var(--text3)" id="file-pct">0%</span>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
+        <div class="form-group"><label class="form-label">รหัสเอกสาร *</label><input class="form-input" placeholder="เช่น SOP-ENG-023" id="up-code"></div>
+        <div class="form-group"><label class="form-label">หมวดหมู่ *</label>
+          <select class="form-input"><option>SOP</option><option>WI</option><option>FM</option></select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">ชื่อเอกสาร *</label><input class="form-input" placeholder="ระบุชื่อเต็มของเอกสาร" id="up-name"></div>
+      <div class="form-group"><label class="form-label">Change Note *</label>
+        <textarea class="form-input form-textarea" placeholder="อธิบายสิ่งที่เปลี่ยนแปลงหรือเหตุผลที่สร้างเอกสารนี้..."></textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:0"><label class="form-label">Approval Workflow</label>
+        <select class="form-input"><option>Standard: Author → QA → Manager → Director</option><option>Fast-track: Author → QA Manager</option></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-upload')">ยกเลิก</button>
+      <button class="btn btn-ghost" onclick="saveDraft()"><i data-lucide="save"></i> Draft</button>
+      <button class="btn btn-primary" onclick="submitDoc()"><i data-lucide="send"></i> ส่งขออนุมัติ</button>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="modal-detail">
+  <div class="modal" style="max-width:540px">
+    <div class="modal-header">
+      <div class="modal-title" id="det-title">—</div>
+      <button class="modal-close" onclick="closeModal('modal-detail')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body" id="det-body"></div>
+    <div class="modal-footer" id="det-footer"></div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script>
+const myDocs = [
+  {code:'SOP-ENG-022',name:'การ Calibrate เครื่องชั่ง Class II',rev:'Rev 1',status:'rejected',date:'24 พ.ค. 68',rejectedNote:'ข้อมูล Spec ไม่ครบถ้วน — กรุณาระบุ tolerance range และเพิ่ม reference OIML R 76',
+   steps:[{l:'คุณ',s:'done'},{l:'Eng. Lead',s:'done'},{l:'Safety',s:'reject'},{l:'ผจก.',s:'pending'}]},
+  {code:'WI-ENG-015',name:'การทำความสะอาดเครื่อง Compactor M-03',rev:'Rev 2',status:'pending',date:'22 พ.ค. 68',
+   steps:[{l:'คุณ',s:'done'},{l:'Eng. Lead',s:'done'},{l:'Safety',s:'active'},{l:'ผจก.',s:'pending'}]},
+  {code:'SOP-ENG-019',name:'PM รายไตรมาส — เครื่อง Granulator',rev:'Rev 3',status:'pending',date:'18 พ.ค. 68',
+   steps:[{l:'คุณ',s:'done'},{l:'Eng. Lead',s:'active'},{l:'Safety',s:'pending'},{l:'ผจก.',s:'pending'}]},
+  {code:'WI-ENG-008',name:'การตรวจสอบ Pressure Gauge ประจำสัปดาห์',rev:'Rev 4',status:'approved',date:'10 พ.ค. 68',
+   steps:[{l:'คุณ',s:'done'},{l:'Eng. Lead',s:'done'},{l:'Safety',s:'done'},{l:'ผจก.',s:'done'}]},
+  {code:'SOP-ENG-007B',name:'Preventive Maintenance Compactor M-02 (ฉบับใหม่)',rev:'Rev 1',status:'approved',date:'05 พ.ค. 68',
+   steps:[{l:'คุณ',s:'done'},{l:'Eng. Lead',s:'done'},{l:'ผจก.',s:'done'}]},
+  {code:'FM-ENG-003',name:'Daily Machine Log Sheet',rev:'Rev 2',status:'draft',date:'28 พ.ค. 68',
+   steps:[{l:'คุณ',s:'active'},{l:'Eng. Lead',s:'pending'},{l:'ผจก.',s:'pending'}]},
+];
+
+let filterStatus='';
+
+function filterMyDocs(v){ filterStatus=v; renderMyDocs(); }
+
+function renderMyDocs(){
+  const data=filterStatus?myDocs.filter(d=>d.status===filterStatus):myDocs;
+  const sb={approved:'badge-green',pending:'badge-amber',rejected:'badge-red',draft:'badge-blue'};
+  const sl={approved:'อนุมัติแล้ว',pending:'รออนุมัติ',rejected:'ส่งกลับแก้ไข',draft:'Draft'};
+  const el=document.getElementById('my-doc-list');
+  if(!data.length){el.innerHTML='<div style="text-align:center;padding:32px;color:var(--text3)">ไม่มีเอกสาร</div>';return;}
+  el.innerHTML=data.map(d=>`
+    <div class="doc-card${d.status==='rejected'?' urgent':''}" onclick="openDetail('${d.code}')">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+        <span style="font-family:var(--mono);font-size:12px;font-weight:700">${d.code}</span>
+        <span class="badge badge-gray" style="font-size:9px">${d.rev}</span>
+        <span class="badge ${sb[d.status]}">${sl[d.status]}</span>
+        <span style="font-size:11px;color:var(--text3);margin-left:auto">${d.date}</span>
+      </div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:10px">${d.name}</div>
+      <div class="status-track">
+        ${d.steps.map((s,i)=>`
+          <div class="st-step">
+            <div class="st-circle ${s.s}">
+              ${s.s==='done'?'<i data-lucide="check" style="width:11px;height:11px"></i>':s.s==='reject'?'<i data-lucide="x" style="width:11px;height:11px"></i>':s.s==='active'?'<i data-lucide="clock" style="width:10px;height:10px"></i>':(i+1)}
+            </div>
+            <div class="st-label ${s.s}">${s.l}</div>
+          </div>
+          ${i<d.steps.length-1?`<div class="st-line${s.s==='done'?' done':''}"></div>`:''}`).join('')}
+      </div>
+      ${d.rejectedNote?`<div style="margin-top:8px;background:var(--red-dim);border:1px solid rgba(220,38,38,.15);border-radius:6px;padding:6px 10px;font-size:11px;color:var(--red)"><i data-lucide="alert-circle" style="width:11px;height:11px"></i> ${d.rejectedNote}</div>`:''}
+      <div style="display:flex;gap:6px;margin-top:10px" onclick="event.stopPropagation()">
+        ${d.status==='rejected'?`<button class="btn btn-primary btn-xs" onclick="openModal('modal-upload')"><i data-lucide="pencil" style="width:11px;height:11px"></i> แก้ไขและส่งใหม่</button>`:''}
+        ${d.status==='draft'?`<button class="btn btn-primary btn-xs" onclick="openModal('modal-upload')"><i data-lucide="send" style="width:11px;height:11px"></i> ส่งขออนุมัติ</button>`:''}
+        <button class="btn btn-ghost btn-xs"><i data-lucide="download" style="width:11px;height:11px"></i> ดาวน์โหลด</button>
+        <button class="btn btn-ghost btn-xs" onclick="openDetail('${d.code}')"><i data-lucide="eye" style="width:11px;height:11px"></i> ดูรายละเอียด</button>
+      </div>
+    </div>`).join('');
+  lucide.createIcons();
+}
+
+function openDetail(code){
+  const d=myDocs.find(x=>x.code===code)||{code,name:'—',rev:'—',status:'pending',date:'—',steps:[]};
+  const sb={approved:'badge-green',pending:'badge-amber',rejected:'badge-red',draft:'badge-blue'};
+  const sl={approved:'อนุมัติแล้ว',pending:'รออนุมัติ',rejected:'ส่งกลับแก้ไข',draft:'Draft'};
+  document.getElementById('det-title').innerHTML=`<i data-lucide="file-text" style="color:var(--accent)"></i> ${d.code}`;
+  document.getElementById('det-body').innerHTML=`
+    <div style="display:flex;gap:7px;margin-bottom:12px;flex-wrap:wrap">
+      <span class="badge badge-gray">${d.rev}</span>
+      <span class="badge ${sb[d.status]}">${sl[d.status]}</span>
+    </div>
+    <div class="meta-grid" style="margin-bottom:14px">
+      <div class="meta-item"><div class="meta-key">รหัส</div><div class="meta-val" style="font-family:var(--mono);font-size:12px">${d.code}</div></div>
+      <div class="meta-item"><div class="meta-key">วันที่ส่ง</div><div class="meta-val" style="font-size:12px">${d.date}</div></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">สถานะ Workflow</div>
+    <div class="status-track" style="margin-bottom:14px">
+      ${d.steps.map((s,i)=>`
+        <div class="st-step">
+          <div class="st-circle ${s.s}">${s.s==='done'?'<i data-lucide="check" style="width:11px;height:11px"></i>':s.s==='reject'?'<i data-lucide="x" style="width:11px;height:11px"></i>':s.s==='active'?'<i data-lucide="clock" style="width:10px;height:10px"></i>':(i+1)}</div>
+          <div class="st-label ${s.s}">${s.l}</div>
+        </div>
+        ${i<d.steps.length-1?`<div class="st-line${s.s==='done'?' done':''}"></div>`:''}`).join('')}
+    </div>
+    ${d.rejectedNote?`<div style="background:var(--red-dim);border:1px solid rgba(220,38,38,.15);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--red);margin-bottom:10px"><div style="font-weight:700;margin-bottom:3px">ความเห็นผู้ตรวจ:</div>${d.rejectedNote}</div>`:''}`;
+  document.getElementById('det-footer').innerHTML=`
+    <button class="btn btn-ghost" onclick="closeModal('modal-detail')">ปิด</button>
+    <button class="btn btn-ghost"><i data-lucide="download"></i> ดาวน์โหลด</button>
+    ${d.status==='rejected'||d.status==='draft'?`<button class="btn btn-primary" onclick="closeModal('modal-detail');openModal('modal-upload')"><i data-lucide="pencil"></i> แก้ไข</button>`:''}`;
+  openModal('modal-detail');
+}
+
+function selectUploadType(t){
+  ['new','rev'].forEach(x=>{
+    const el=document.getElementById('opt-'+x);
+    el.style.border=x===t?'2px solid var(--accent)':'1px solid var(--border2)';
+    el.style.background=x===t?'var(--accent-dim)':'';
+  });
+}
+function handleFile(inp){
+  if(!inp.files.length)return;
+  document.getElementById('file-name').textContent=inp.files[0].name;
+  document.getElementById('file-preview').style.display='block';
+  lucide.createIcons();
+  let p=0;const iv=setInterval(()=>{p+=12;document.getElementById('file-prog').style.width=Math.min(p,100)+'%';document.getElementById('file-pct').textContent=Math.min(p,100)+'%';if(p>=100){clearInterval(iv);showToast('อัปโหลดสำเร็จ','success');}},70);
+}
+function saveDraft(){closeModal('modal-upload');showToast('บันทึก Draft แล้ว','info');}
+function submitDoc(){
+  if(!document.getElementById('up-code').value||!document.getElementById('up-name').value){showToast('กรุณากรอกข้อมูลให้ครบ','error');return;}
+  closeModal('modal-upload');showToast('ส่งขออนุมัติเรียบร้อย — Workflow เริ่มแล้ว','success');
+}
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('collapsed');}
+function openModal(id){document.getElementById(id).classList.add('open');lucide.createIcons();}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');}));
+function showToast(msg,type='info'){
+  const wrap=document.getElementById('toast-wrap'),t=document.createElement('div');t.className='toast '+type;
+  const ic={success:'circle-check',error:'alert-circle',info:'info'};
+  const co={success:'var(--green)',error:'var(--red)',info:'var(--accent)'};
+  t.innerHTML=`<i data-lucide="${ic[type]}" style="width:16px;height:16px;color:${co[type]};flex-shrink:0"></i><span>${msg}</span>`;
+  wrap.appendChild(t);lucide.createIcons();
+  setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(20px)';t.style.transition='.2s';setTimeout(()=>t.remove(),200);},3500);
+}
+document.addEventListener('DOMContentLoaded',()=>{renderMyDocs();lucide.createIcons();});
+
+// ── Role-aware init ──
+document.addEventListener('DOMContentLoaded', () => {
+  buildSidebar('emp-01-my-documents');
+  DMS_applyRoleUI();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+});
+</script>
+</body>
+</html>
